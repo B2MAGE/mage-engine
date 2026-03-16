@@ -12,14 +12,14 @@
       "z": 0
     },
     "position0": {
-      "x": 12.629017483264235,
-      "y": 9.865184704900875,
-      "z": -52.937103890017916
+      "x": -17.50291939907388,
+      "y": 3.359703346733727,
+      "z": 6.0965010406462
     },
     "zoom0": 1
   },
   "intent": {
-    "time_multiplier": 1.0,
+    "time_multiplier": 1,
     "minimizing_factor": 0.8968478260869565,
     "power_factor": 9.804347826086957,
     "pointerDownMultiplier": 0.5,
@@ -27,8 +27,8 @@
     "easing_speed": 0.49369565217391304,
     "camTilt": 5.668525874955496,
     "autoRotate": true,
-    "autoRotateSpeed": 12.032608695652174,
-    "fov": 75.0
+    "autoRotateSpeed": 1.184782608695652,
+    "fov": 75
   },
   "fx": {
     "bloom": {
@@ -38,7 +38,7 @@
       "threshold": 0.6956521739130435
     },
     "toneMapping": {
-      "method": 2.0,
+      "method": 0,
       "exposure": 260.86956521739137
     },
     "passes": {
@@ -53,7 +53,7 @@
       "halftone": true,
       "gammaCorrection": true,
       "kaleid": false,
-      "outputPass": false
+      "outputPass": true
     },
     "params": {
       "rgbShift": {
@@ -67,9 +67,34 @@
         "color": 0
       },
       "kaleid": {
-        "sides": 6.0,
-        "angle": 0.0
+        "sides": 6,
+        "angle": 0
       }
     }
+  },
+  "state": {
+    "time_multiplier": 1,
+    "mouse": {
+      "x": -1.1448327545733414,
+      "y": 0.8788481822459486,
+      "z": 0
+    },
+    "currMouse": {
+      "x": -1.14453125,
+      "y": 0.8793981481481481,
+      "z": 0
+    },
+    "size": 0.07768881303106932,
+    "pointerDown": 0.8970544339526756,
+    "pointerDownMultiplier": 0.5,
+    "currPointerDown": 0.5,
+    "currAudio": 0.07770993965622731,
+    "time": 23.00890000003642,
+    "volume_multiplier": 0,
+    "minimizing_factor": 0.8968478260869565,
+    "power_factor": 9.804347826086957,
+    "base_speed": 0.7452173913043478,
+    "easing_speed": 0.49369565217391304,
+    "camTilt": 5.668525874955496
   }
 }

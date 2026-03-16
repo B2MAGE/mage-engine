@@ -10,9 +10,9 @@ export default defineConfig({
       entry: "./js/mage-lib.js",
       name: "MAGE",
       fileName: "mage-engine",
-      formats: ["umd"],
-      sourcemap: true,
-      minify: false, // easier line-accurate debugging
-    }
+      formats: ["es", "umd"],
+    },
+    sourcemap: true,
+    minify: false, // easier line-accurate debugging
   }
 })

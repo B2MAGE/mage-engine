@@ -88,8 +88,8 @@ textarea {
 }
 
 #mage {
-  width: min(960px, 92vw);
-  aspect-ratio: 16 / 9;
+  width: min(800px, 92vw);
+  aspect-ratio: 1 / 1;
   background: #000;
   border-radius: 12px;
   overflow: hidden;
@@ -102,7 +102,7 @@ textarea {
   display: block;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 800px) {
   .layout {
     grid-template-columns: 1fr;
   }
@@ -165,7 +165,7 @@ textarea {
 
   <input type="file" id="file" style="display:none;" />
 
-  <script type = "module">
+  <script type="module">
     import { initMAGE } from "./js/mage-lib.js";
     window.addEventListener('load', () => {
         const logEl = document.getElementById('log');
@@ -182,6 +182,7 @@ textarea {
             canvas,
             withControls: true,
             autoStart: true,
+            assetBaseUrl: './resources/',
         });
 
         document.getElementById('btnStart').addEventListener('click', () => {

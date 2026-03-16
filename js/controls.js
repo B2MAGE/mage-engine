@@ -10,7 +10,7 @@ import {
 import { Pane } from 'tweakpane';
 import effects from './effects.js';
 
-export function initControls(engine) {
+export function initControls(engine, options = {}) {
   const scene = engine.scene;
   const renderer = engine.renderer;
   const camera = engine.camera;
@@ -22,6 +22,8 @@ export function initControls(engine) {
 
   const SKYBOX_COUNT = 10;
   const EMBEDDED_PRESET_IDS = [1, 2, 3, 4, 5];
+  const baseUrlInput = options.assetBaseUrl ?? engine.assetBaseUrl ?? '../resources';
+  const assetBaseUrl = `${String(baseUrlInput).replace(/\/+$/, '')}`;
 
   let composer = engine.composer;
   let audio = engine.audio;
@@ -38,7 +40,7 @@ export function initControls(engine) {
   tooltipUI.element.style.zIndex = '5';
   tooltipUI.element.style.pointerEvents = 'none';
   tooltipUI.element.style.display = 'none';
-  tooltipUI.element.innerHTML = '<img src="../resources/controltips.png" alt="controls" />';
+  tooltipUI.element.innerHTML = `<img src="${assetBaseUrl}/controltips.png" alt="controls" />`;
   document.body.appendChild(tooltipUI.element);
 
   const previousAfterFrame = engine.onAfterFrame;
@@ -91,7 +93,7 @@ export function initControls(engine) {
 
   const loadEmbeddedPresetById = async presetId => {
     const candidates = [
-      `../resources/preset${presetId}/preset.v2.json`,
+      `${assetBaseUrl}/preset${presetId}/preset.v2.json`,
     ];
 
     for (const url of candidates) {
@@ -111,7 +113,7 @@ export function initControls(engine) {
       }
     }
 
-    console.warn(`[MAGE] Failed to load embedded preset ${presetId}. Checked preset.json in known resource folders.`);
+    console.warn(`[MAGE] Failed to load embedded preset ${presetId}. Checked ${assetBaseUrl}/preset*/preset.v2.json.`);
     return false;
   };
 
