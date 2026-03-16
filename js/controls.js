@@ -408,10 +408,12 @@ export function initControls(engine) {
       pptab.pages[0]
         .addBinding(effects.sobelShader, 'enabled', { label: 'Sobel' })
         .on('change', () => {
+          const bufferWidth = renderer.domElement.width || window.innerWidth * window.devicePixelRatio;
+          const bufferHeight = renderer.domElement.height || window.innerHeight * window.devicePixelRatio;
           effects.sobelShader.shader.uniforms.resolution.value.x =
-            window.innerWidth * window.devicePixelRatio;
+            bufferWidth;
           effects.sobelShader.shader.uniforms.resolution.value.y =
-            window.innerHeight * window.devicePixelRatio;
+            bufferHeight;
         });
 
       pptab.pages[0].addBinding(effects.glitchPass, 'enabled', {
@@ -519,10 +521,12 @@ export function initControls(engine) {
 
         renderer.toneMapping = effects.toneMapping.method;
         if (effects.sobelShader?.shader?.uniforms?.resolution?.value) {
+          const bufferWidth = renderer.domElement.width || window.innerWidth * window.devicePixelRatio;
+          const bufferHeight = renderer.domElement.height || window.innerHeight * window.devicePixelRatio;
           effects.sobelShader.shader.uniforms.resolution.value.x =
-            window.innerWidth * window.devicePixelRatio;
+            bufferWidth;
           effects.sobelShader.shader.uniforms.resolution.value.y =
-            window.innerHeight * window.devicePixelRatio;
+            bufferHeight;
         }
 
         composer = effects.applyPostProcessing(scene, renderer, camera, composer);
@@ -587,9 +591,15 @@ export function initControls(engine) {
     };
 
     window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+      if (typeof engine._syncViewport === 'function') {
+        engine._syncViewport(true);
+      }
+      if (effects.sobelShader?.shader?.uniforms?.resolution?.value) {
+        const bufferWidth = renderer.domElement.width || window.innerWidth * window.devicePixelRatio;
+        const bufferHeight = renderer.domElement.height || window.innerHeight * window.devicePixelRatio;
+        effects.sobelShader.shader.uniforms.resolution.value.x = bufferWidth;
+        effects.sobelShader.shader.uniforms.resolution.value.y = bufferHeight;
+      }
       composer = effects.applyPostProcessing(scene, renderer, camera, composer);
       engine.composer = composer;
     });

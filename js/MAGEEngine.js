@@ -448,6 +448,22 @@ export class MAGEEngine {
           kaleid: effects.kaleidoShader.enabled,
           outputPass: effects.outputPass.enabled,
         },
+        params: {
+          rgbShift: {
+            amount: effects.RGBShift.shader.uniforms.amount.value,
+            angle: effects.RGBShift.shader.uniforms.angle.value,
+          },
+          afterImage: {
+            damp: effects.afterImagePass.shader.uniforms.damp.value,
+          },
+          colorify: {
+            color: effects.colorifyShader.color,
+          },
+          kaleid: {
+            sides: effects.kaleidoShader.shader.uniforms.sides.value,
+            angle: effects.kaleidoShader.shader.uniforms.angle.value,
+          },
+        },
       },
     };
 
@@ -525,6 +541,43 @@ export class MAGEEngine {
       if (typeof fx.passes.gammaCorrection === 'boolean') effects.gammaCorrectionShader.enabled = fx.passes.gammaCorrection;
       if (typeof fx.passes.kaleid === 'boolean') effects.kaleidoShader.enabled = fx.passes.kaleid;
       if (typeof fx.passes.outputPass === 'boolean') effects.outputPass.enabled = fx.passes.outputPass;
+    }
+
+    if (fx.params && typeof fx.params === 'object') {
+      if (fx.params.rgbShift && typeof fx.params.rgbShift === 'object') {
+        if (typeof fx.params.rgbShift.amount === 'number' && Number.isFinite(fx.params.rgbShift.amount)) {
+          effects.RGBShift.shader.uniforms.amount.value = fx.params.rgbShift.amount;
+        }
+        if (typeof fx.params.rgbShift.angle === 'number' && Number.isFinite(fx.params.rgbShift.angle)) {
+          effects.RGBShift.shader.uniforms.angle.value = fx.params.rgbShift.angle;
+        }
+      }
+
+      if (fx.params.afterImage && typeof fx.params.afterImage === 'object') {
+        if (typeof fx.params.afterImage.damp === 'number' && Number.isFinite(fx.params.afterImage.damp)) {
+          effects.afterImagePass.shader.uniforms.damp.value = fx.params.afterImage.damp;
+        }
+      }
+
+      if (fx.params.kaleid && typeof fx.params.kaleid === 'object') {
+        if (typeof fx.params.kaleid.sides === 'number' && Number.isFinite(fx.params.kaleid.sides)) {
+          effects.kaleidoShader.shader.uniforms.sides.value = fx.params.kaleid.sides;
+        }
+        if (typeof fx.params.kaleid.angle === 'number' && Number.isFinite(fx.params.kaleid.angle)) {
+          effects.kaleidoShader.shader.uniforms.angle.value = fx.params.kaleid.angle;
+        }
+      }
+
+      if (fx.params.colorify && typeof fx.params.colorify === 'object' && fx.params.colorify.color !== undefined) {
+        const colorValue = fx.params.colorify.color;
+        if (effects.colorifyShader.color && typeof effects.colorifyShader.color.set === 'function') {
+          try {
+            effects.colorifyShader.color.set(colorValue);
+          } catch {
+            // Keep current color if payload is not parseable by three.Color.
+          }
+        }
+      }
     }
 
     if (this.composer) {
@@ -802,7 +855,7 @@ export class MAGEEngine {
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.setClearColor(new Color(1, 1, 1), 0);
     // Match original renderer tone mapping exposure behavior
-    this.renderer.toneMappingexposure = effects.toneMapping.exposure;
+    this.renderer.toneMappingExposure = effects.toneMapping.exposure;
     this.renderer.outputColorSpace = SRGBColorSpace;
 
     if (!this.canvas) {

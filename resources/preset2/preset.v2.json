@@ -54,6 +54,22 @@
       "gammaCorrection": true,
       "kaleid": false,
       "outputPass": false
+    },
+    "params": {
+      "rgbShift": {
+        "amount": 0.02282608695652174,
+        "angle": 1.5707963267948966
+      },
+      "afterImage": {
+        "damp": 0.18478260869565216
+      },
+      "colorify": {
+        "color": 0
+      },
+      "kaleid": {
+        "sides": 6.0,
+        "angle": 0.0
+      }
     }
   }
 }

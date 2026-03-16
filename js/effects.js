@@ -183,10 +183,15 @@ let effects = {
     
     enabled : false,
     
-    update : function() {
+    update : function(renderer) {
+      const resolution = new Vector2(window.innerWidth, window.innerHeight);
+      if (renderer && renderer.getDrawingBufferSize) {
+        renderer.getDrawingBufferSize(resolution);
+      }
+
       this.shader?.dispose(); // CALL DISPOSE TO PREVENT MEM LEAKS
       this.shader = new UnrealBloomPass(
-        new Vector2(window.innerWidth, window.innerHeight),
+        resolution,
         this.settings.strength,
         this.settings.radius,
         this.settings.threshold
@@ -218,10 +223,10 @@ let effects = {
   },
   applyPostProcessing : function(scene, renderer, camera, composer) {
     
-  // CALL DISPOSE TO PREVENT MEM LEAKS
-  this.bloom.update(); 
-  this.toonShader.update();
-  this.colorifyShader.update();
+    // CALL DISPOSE TO PREVENT MEM LEAKS
+    this.bloom.update(renderer); 
+    this.toonShader.update();
+    this.colorifyShader.update();
 
     // clean slate
     composer?.dispose();

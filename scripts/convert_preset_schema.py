@@ -196,12 +196,33 @@ def _convert_legacy_to_v2(data: Dict[str, Any]) -> Dict[str, Any]:
             "kaleid": _as_bool(index.first_by_label("Kaleid")),
             "outputPass": _as_bool(index.first_by_label("Output Pass")),
         },
+        "params": {
+            "rgbShift": {
+                "amount": _as_number(index.first_by_label("RGB Shift")),
+                "angle": _as_number(index.first_by_label("Angle")),
+            },
+            "afterImage": {
+                "damp": _as_number(index.first_by_label("After Image Damp")),
+            },
+            "colorify": {
+                "color": index.first_by_label("Colorify Hue"),
+            },
+            "kaleid": {
+                "sides": _as_number(index.first_by_label("Kaleidoscope sides")),
+                "angle": _as_number(index.first_by_label("Kaleidoscope angle")),
+            },
+        },
     }
 
     # Drop null fx values to avoid writing noisy placeholders.
     fx["bloom"] = {k: v for k, v in fx["bloom"].items() if v is not None}
     fx["toneMapping"] = {k: v for k, v in fx["toneMapping"].items() if v is not None}
     fx["passes"] = {k: v for k, v in fx["passes"].items() if v is not None}
+    fx["params"]["rgbShift"] = {k: v for k, v in fx["params"]["rgbShift"].items() if v is not None}
+    fx["params"]["afterImage"] = {k: v for k, v in fx["params"]["afterImage"].items() if v is not None}
+    fx["params"]["colorify"] = {k: v for k, v in fx["params"]["colorify"].items() if v is not None}
+    fx["params"]["kaleid"] = {k: v for k, v in fx["params"]["kaleid"].items() if v is not None}
+    fx["params"] = {k: v for k, v in fx["params"].items() if v}
 
     out: Dict[str, Any] = {
         "version": "2.0.0",
