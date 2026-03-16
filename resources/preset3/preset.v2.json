@@ -1,0 +1,59 @@
+{
+  "version": "2.0.0",
+  "visualizer": {
+    "shader": "\n  setMaxIterations(14);\n  setStepSize(0.3282379869785127);\n\n  let size = input();\n  let pointerDown = input();\n  time *= 0.9283287663605639; // Randomize time multiplier between 0.1 and 1\n  rotateY(mouse.x * -5 * PI / 2 + time - (pointerDown + 0.1));\n  rotateX(mouse.y * 5 * PI / 2 + time);\n\n  // Set color\n  color(getRayDirection().z, getRayDirection().y, 0.6439706727352774);\n\n  // Get the current coordinate space once and store in s\n  let s = getSpace();\n\n  // Add rotations\n  rotateX(getRayDirection().y * 1.6433527398721441 + time);\n  rotateY(getRayDirection().x * 1.213901432831976 + time);\n  rotateZ(getRayDirection().z * 2.7042123257269144 + time);\n\n  // Apply metal and shine\n  metal(0.39433751950552626 * size);\n  shine(0.7653105149809418);\n\n  // Render the shapes\n  grid(4, size * 0.9804420049544316 - pointerDown * 0.05 / 3, 0.01 * size * 0.9804420049544316 - pointerDown * 0.05);\nexpand(noise(s * 1.2319501726815334) * 0.0540782757156445); boxFrame(vec3(size * 0.6327209467255018 - pointerDown * 0.05), size * 0.6327209467255018 - pointerDown * 0.05 * 0.1);\nexpand(noise(s * 0.558070945791699) * 0.4443645288565007); sphere(size * 0.5655253804119734 - pointerDown * 0.05 / 2);\n\n  // Apply blending\n  blend(nsin(time * size) * 0.1600182210374048);\n\n  // Extra shape\n  boxFrame(vec3(size * 0.7), size * 0.05);\n",
+    "skyboxPreset": 3,
+    "scale": 10.0
+  },
+  "controls": {
+    "target0": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "position0": {
+      "x": 109.31130800193117,
+      "y": 26.31053563953298,
+      "z": -69.69356484893254
+    },
+    "zoom0": 1
+  },
+  "intent": {
+    "time_multiplier": 1.0,
+    "minimizing_factor": 0.8752173913043478,
+    "power_factor": 8.532608695652176,
+    "pointerDownMultiplier": 0.0,
+    "base_speed": 0.2,
+    "easing_speed": 0.62,
+    "camTilt": 0.0,
+    "autoRotate": true,
+    "autoRotateSpeed": 0.2,
+    "fov": 75.0
+  },
+  "fx": {
+    "bloom": {
+      "enabled": false,
+      "strength": 0.29999999999999993,
+      "radius": 0.010000000000000009,
+      "threshold": 0.1
+    },
+    "toneMapping": {
+      "method": 0.0,
+      "exposure": -54.34782608695656
+    },
+    "passes": {
+      "rgbShift": true,
+      "dot": false,
+      "technicolor": true,
+      "luminosity": true,
+      "afterImage": false,
+      "sobel": true,
+      "glitch": false,
+      "colorify": false,
+      "halftone": false,
+      "gammaCorrection": false,
+      "kaleid": true,
+      "outputPass": true
+    }
+  }
+}

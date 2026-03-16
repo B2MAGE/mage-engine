@@ -23,6 +23,7 @@ import {
   ACESFilmicToneMapping,
   AgXToneMapping,
   NeutralToneMapping,
+  log,
 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createSculptureWithGeometry } from 'shader-park-core';
@@ -161,12 +162,11 @@ export class MAGEEngine {
     this.screenShake = this._createScreenShake();
     this.currentPreset = null;
 
-    // Optional per-frame hook external code (UI, debug overlays,
-    // analytics, etc.) can attach to. Called once at the end of
-    // each render loop iteration; engine itself stays UI-agnostic.
+    // Engine Hooks - can be set by external code (e.g. controls.js) to integrate with engine lifecycle and state
     this.onAfterFrame = null;
     this.onPresetLoaded = null;
     this.exportSettingsState = null;
+    this.refreshSettingsUI = null;
     this.viewportWidth = 0;
     this.viewportHeight = 0;
 
@@ -281,18 +281,6 @@ export class MAGEEngine {
 
     this.currentPreset = preset;
 
-    if (preset.state) {
-      this._applyStatePatch(preset.state, { applied: [], warnings: [] });
-    }
-
-    if (preset.intent) {
-      this._applyCompactIntent(preset.intent);
-    }
-
-    if (preset.fx) {
-      this._applyCompactFx(preset.fx);
-    }
-    
     if (preset.controls) {
       this._loadControls(preset.controls);
     }
@@ -305,118 +293,59 @@ export class MAGEEngine {
         } else if (options.log !== false) {
           console.warn('[MAGEEngine.loadPreset] Invalid skyboxPreset input; expected preset id, preset path, or { type, presetId }', { input: preset.visualizer.skyboxPreset });
         }
-        if (preset.visualizer.shader) {
-          this._loadVisualizer(preset.visualizer.shader);
-        }
+      }
+      if (preset.visualizer.shader) {
+        this._loadVisualizer(preset.visualizer.shader);
       }
       if (typeof preset.visualizer.scale === 'number') {
         this.visualizer.scale = preset.visualizer.scale;
       }
     }
 
-    // if (preset.audioPath) {
-    //   this.loadAudio(preset.audioPath);
-    // }
+    if (preset.state) {
+      this._applyStatePatch(preset.state, { applied: [], warnings: [] });
+    }
 
     if (typeof this.importSettingsState === 'function' && preset.settings) {
       this.importSettingsState(preset.settings);
     }
 
+    if (preset.intent) {
+      this._applyCompactIntent(preset.intent);
+    }
+
+    if (preset.fx) {
+      this._applyCompactFx(preset.fx);
+    }
+
+    // if (preset.audioPath) {
+    //   this.loadAudio(preset.audioPath);
+    // }
+
+    this._syncPostProcessingFromState();
+
+    if (typeof this.refreshSettingsUI === 'function') {
+      this.refreshSettingsUI();
+    }
+
+    if (typeof this.onPresetLoaded === 'function') {
+      this.onPresetLoaded(preset);
+    }
+
     return preset;
   }
 
-  // loadPreset(presetInput, options = {}) {
-  //   const report = {
-  //     success: false,
-  //     inputType: Array.isArray(presetInput) ? 'array' : typeof presetInput,
-  //     applied: [],
-  //     missing: [],
-  //     invalid: [],
-  //     warnings: [],
-  //     message: '',
-  //     preset: null,
-  //   };
+  _syncPostProcessingFromState() {
+    if (!this.renderer || !this.scene || !this.camera) {
+      return;
+    }
 
-  //   const root = this._coercePresetInput(presetInput, report);
-  //   if (!root) {
-  //     report.message = this._summarizePresetReport(report);
-  //     if (options.log !== false) {
-  //       console.warn('[MAGEEngine.loadPreset] ' + report.message, report);
-  //     }
-  //     return report;
-  //   }
+    this.renderer.toneMapping = effects.toneMapping.method;
 
-  //   const visualizerPatch = this._extractVisualizerPatch(root, report);
-  //   const statePatch = this._extractStatePatch(root, report);
-  //   const controlsPatch = this._extractControlsPatch(root, report);
-
-  //   const normalizedPreset = new MAGEPreset({
-  //     controls: controlsPatch,
-  //     settings: root.settings && typeof root.settings === 'object' ? root.settings : null,
-  //     state: statePatch,
-  //     visualizer: visualizerPatch,
-  //     audioPath: typeof root.audioPath === 'string' ? root.audioPath : typeof root.audio === 'string' ? root.audio : null,
-  //   });
-
-  //   this.currentPreset = normalizedPreset;
-  //   report.preset = normalizedPreset;
-
-  //   const shaderCode = visualizerPatch.shader ?? null;
-  //   const skyboxInput = visualizerPatch.skyboxPreset ?? null;
-
-  //   if (typeof visualizerPatch.scale === 'number') {
-  //     this.visualizer.scale = visualizerPatch.scale;
-  //     report.applied.push('visualizer.scale');
-  //   } else if (Object.hasOwn(visualizerPatch, 'scale')) {
-  //     report.invalid.push('visualizer.scale must be a finite number');
-  //   }
-
-
-  //   if (skyboxInput) {
-  //     const normalizedSkybox = this._normalizeSkyboxInput(skyboxInput);
-  //     if (normalizedSkybox) {
-  //       this._loadSkybox(normalizedSkybox);
-  //       report.applied.push('visualizer.skyboxPreset');
-  //     } else {
-  //       report.invalid.push('visualizer.skyboxPreset must be a preset id, a preset path, or { type, presetId }');
-  //     }
-  //   } else {
-  //     report.missing.push('visualizer.skyboxPreset');
-  //   }
-
-  //   this._applyStatePatch(statePatch, report);
-
-  //   if (typeof shaderCode === 'string' && shaderCode.trim()) {
-  //     this._loadVisualizer(shaderCode);
-  //     report.applied.push('visualizer.shader');
-  //   } else if (!this.visualizer.mesh) {
-  //     this._loadDefaultVisualizer();
-  //     report.warnings.push('No valid visualizer.shader provided; loaded default visualizer because no mesh was active.');
-  //   } else {
-  //     report.missing.push('visualizer.shader');
-  //   }
-
-  //   if (controlsPatch) {
-  //     this._loadControls(controlsPatch);
-  //     report.applied.push('controls');
-  //   } else {
-  //     report.missing.push('controls');
-  //   }
-
-  //   report.success = report.invalid.length === 0;
-  //   report.message = this._summarizePresetReport(report);
-
-  //   if (typeof this.onPresetLoaded === 'function') {
-  //     this.onPresetLoaded(normalizedPreset);
-  //   }
-
-  //   if (options.log !== false) {
-  //     const logFn = report.invalid.length > 0 ? console.warn : console.info;
-  //     logFn('[MAGEEngine.loadPreset] ' + report.message, report);
-  //   }
-
-  //   return report;
-  // }
+    if (this.composer) {
+      this.composer = effects.applyPostProcessing(this.scene, this.renderer, this.camera, this.composer);
+    }
+  }
 
   toPreset({ includeState = false, includeSettings = true, schema = 'compact' } = {}) {
     if (this.controls && this.controls.saveState) {

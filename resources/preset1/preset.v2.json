@@ -1,0 +1,59 @@
+{
+  "version": "2.0.0",
+  "visualizer": {
+    "shader": "\n            setMaxIterations(20);\n            setStepSize(0.5673785683445168);\n    \n            let size = input();\n            let pointerDown = input();\n            time *= 0.4016981885831138;\n    \n            rotateY(mouse.x * -5 * PI / 2 + time - (pointerDown + 0.1));\n            rotateX(mouse.y * 5 * PI / 2 + time);\n    \n            color(0.5756973511658874, 0.8120533271335437, 0.3051005688491879);\n    \n            let s = getSpace();\n    \n            expand(noise(s * 1.1129086429344648) * 0.3677738285013118); cylinder(size * 0.8725903324112694 - pointerDown * 0.05 / 4, size * 0.8725903324112694 - pointerDown * 0.05);\nexpand(fractalNoise(s * 0.7101349898864906 + time * 0.3671211469925749) * 0.2270350408662556); boxFrame(vec3(size * 0.6071440427877862 - pointerDown * 0.05), size * 0.6071440427877862 - pointerDown * 0.05 * 0.1);\n    \n            blend(nsin(time * size) * 0.1441134445128488);\n        ",
+    "skyboxPreset": 1,
+    "scale": 1.0
+  },
+  "controls": {
+    "target0": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "position0": {
+      "x": -2.22912010061277,
+      "y": 4.121250880852308,
+      "z": -0.5318312190192793
+    },
+    "zoom0": 1
+  },
+  "intent": {
+    "time_multiplier": 1.0,
+    "minimizing_factor": 1.0915217391304348,
+    "power_factor": 10.0,
+    "pointerDownMultiplier": 0.25774731647361726,
+    "base_speed": 0.41630434782608694,
+    "easing_speed": 0.19380434782608696,
+    "camTilt": 3.2781836385284797,
+    "autoRotate": true,
+    "autoRotateSpeed": 0.642391304347826,
+    "fov": 75.0
+  },
+  "fx": {
+    "bloom": {
+      "enabled": true,
+      "strength": 0.8695652173913043,
+      "radius": 0.21739130434782794,
+      "threshold": 3.0434782608695654
+    },
+    "toneMapping": {
+      "method": 0.0,
+      "exposure": 10.869565217391369
+    },
+    "passes": {
+      "rgbShift": false,
+      "dot": false,
+      "technicolor": false,
+      "luminosity": false,
+      "afterImage": false,
+      "sobel": true,
+      "glitch": false,
+      "colorify": false,
+      "halftone": false,
+      "gammaCorrection": false,
+      "kaleid": false,
+      "outputPass": true
+    }
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "version": "2.0.0",
+  "visualizer": {
+    "shader": "\n          let size = input()\n          let pointerDown = input()\n          time = .3*time\n        size *= 1.3\n          rotateY(mouse.x * -2 * PI / 2 * (1+nsin(time)))\n          rotateX(mouse.y * 2 * PI / 2 * (1+nsin(time)))\n          metal(.5*size)\n          let rayDir = normalize(getRayDirection())\n      let clampedColor = vec3(max(0.0, min(rayDir.x + 0.2, 100.0)), max(0.0, min(rayDir.y + 0.2, 100.0)), max(0.0, min(rayDir.z + 0.2, 100.0)))\n      color(clampedColor)\n    \n          rotateY(sin(getRayDirection().y*8*(ncos(sin(time)))+size))\n        rotateX(cos((getRayDirection().x*16*nsin(time)+size)))\n        rotateZ(ncos((getRayDirection().z*4*cos(time)+size)))\n          boxFrame(vec3(size), size*.1)\n          shine(0.8*size)\n          blend(nsin(time*(size))*0.1+0.1)\n          sphere(size/2-pointerDown*.3)\n          blend(ncos((time*(size)))*0.1+0.1)\n          boxFrame(vec3(size-.075*pointerDown), size)\n          ",
+    "skyboxPreset": 5,
+    "scale": 200.0
+  },
+  "controls": {
+    "target0": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "position0": {
+      "x": -97.55907213189012,
+      "y": 54.55331696904257,
+      "z": -19.2118321483797
+    },
+    "zoom0": 1
+  },
+  "intent": {
+    "time_multiplier": 1.0,
+    "minimizing_factor": 0.7119565217391305,
+    "power_factor": 8.0,
+    "pointerDownMultiplier": 0.0,
+    "base_speed": 0.17445652173913043,
+    "easing_speed": 0.6,
+    "camTilt": 0.0,
+    "autoRotate": false,
+    "autoRotateSpeed": 0.1,
+    "fov": 75.0
+  },
+  "fx": {
+    "bloom": {
+      "enabled": true,
+      "strength": 4.8,
+      "radius": 3.478260869565217,
+      "threshold": 1.06
+    },
+    "toneMapping": {
+      "method": 4.0,
+      "exposure": 2.3000000000000007
+    },
+    "passes": {
+      "rgbShift": true,
+      "dot": false,
+      "technicolor": false,
+      "luminosity": false,
+      "afterImage": false,
+      "sobel": true,
+      "glitch": false,
+      "colorify": false,
+      "halftone": false,
+      "gammaCorrection": true,
+      "kaleid": false,
+      "outputPass": false
+    }
+  }
+}

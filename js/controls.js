@@ -20,7 +20,8 @@ export function initControls(engine) {
   const visualizer = engine.visualizer;
   const inputs = engine.inputs;
 
-  const SKYBOX_COUNT = 9;
+  const SKYBOX_COUNT = 10;
+  const EMBEDDED_PRESET_IDS = [1, 2, 3, 4, 5];
 
   let composer = engine.composer;
   let audio = engine.audio;
@@ -37,7 +38,7 @@ export function initControls(engine) {
   tooltipUI.element.style.zIndex = '5';
   tooltipUI.element.style.pointerEvents = 'none';
   tooltipUI.element.style.display = 'none';
-  tooltipUI.element.innerHTML = '<img src="../MAGE/resources/controltips.png" alt="controls" />';
+  tooltipUI.element.innerHTML = '<img src="../resources/controltips.png" alt="controls" />';
   document.body.appendChild(tooltipUI.element);
 
   const previousAfterFrame = engine.onAfterFrame;
@@ -48,8 +49,8 @@ export function initControls(engine) {
 
     if (tooltipUI.visible) {
       tooltipUI.element.style.display = 'block';
-      tooltipUI.element.style.left = `${tooltipUI.x + 10}px`;
-      tooltipUI.element.style.top = `${tooltipUI.y + 10}px`;
+      tooltipUI.element.style.left = `${tooltipUI.x + 3}px`;
+      tooltipUI.element.style.top = `${tooltipUI.y + 3}px`;
     } else {
       tooltipUI.element.style.display = 'none';
     }
@@ -88,13 +89,111 @@ export function initControls(engine) {
     engine.composer = composer;
   };
 
+  const loadEmbeddedPresetById = async presetId => {
+    const candidates = [
+      `../resources/preset${presetId}/preset.v2.json`,
+    ];
+
+    for (const url of candidates) {
+      try {
+        const response = await fetch(url, { cache: 'no-store' });
+        if (!response.ok) {
+          continue;
+        }
+
+        const presetPayload = await response.json();
+        const applied = engine.loadPreset(presetPayload, { log: true });
+        if (applied) {
+          return true;
+        }
+      } catch {
+        // Try next path candidate.
+      }
+    }
+
+    console.warn(`[MAGE] Failed to load embedded preset ${presetId}. Checked preset.json in known resource folders.`);
+    return false;
+  };
+
   const initTweakpane = () => {
     const host = engine.canvas?.parentElement || renderer.domElement.parentElement || document.body;
+    const quickPresetHost = document.createElement('div');
+    let quickPresetButtons = [];
 
     // Ensure host can anchor absolutely-positioned children
     if (getComputedStyle(host).position === 'static') {
       host.style.position = 'relative';
     }
+
+    const setQuickPresetsVisible = visible => {
+      quickPresetHost.style.display = visible ? 'flex' : 'none';
+    };
+
+    quickPresetHost.className = 'mage-embedded-presets';
+    Object.assign(quickPresetHost.style, {
+      position: 'absolute',
+      top: '8px',
+      left: '8px',
+      zIndex: '21',
+      display: 'none',
+      gap: '6px',
+      padding: '6px',
+      borderRadius: '8px',
+      background: 'rgba(10, 12, 18, 0.7)',
+      backdropFilter: 'blur(4px)',
+    });
+    host.appendChild(quickPresetHost);
+
+    const setQuickPresetButtonsDisabled = disabled => {
+      for (const button of quickPresetButtons) {
+        button.disabled = disabled;
+        button.style.opacity = disabled ? '0.6' : '1';
+        button.style.cursor = disabled ? 'progress' : 'pointer';
+      }
+    };
+
+    quickPresetButtons = EMBEDDED_PRESET_IDS.map(presetId => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = `Preset ${presetId}`;
+      Object.assign(button.style, {
+        border: '1px solid rgba(255,255,255,0.25)',
+        borderRadius: '6px',
+        background: 'rgba(255,255,255,0.08)',
+        color: '#fff',
+        fontSize: '12px',
+        lineHeight: '1',
+        padding: '8px 10px',
+        cursor: 'pointer',
+      });
+
+      button.addEventListener('click', async () => {
+        setQuickPresetButtonsDisabled(true);
+        const ok = await loadEmbeddedPresetById(presetId);
+        setQuickPresetButtonsDisabled(false);
+        if (ok) {
+          setQuickPresetsVisible(false);
+        }
+      });
+
+      quickPresetHost.appendChild(button);
+      return button;
+    });
+
+    const previousPresetLoaded = engine.onPresetLoaded;
+    engine.onPresetLoaded = preset => {
+      if (typeof previousPresetLoaded === 'function') {
+        previousPresetLoaded(preset);
+      }
+      setQuickPresetsVisible(!preset);
+    };
+
+    engine.setEmbeddedPresetButtonsVisible = visible => {
+      setQuickPresetsVisible(Boolean(visible));
+    };
+
+    // Show quick presets only in default mode (no preset has been applied yet).
+    setQuickPresetsVisible(!engine.currentPreset);
 
     const paneMount = document.createElement('div');
     paneMount.className = 'mage-pane-host';
@@ -416,7 +515,26 @@ export function initControls(engine) {
         return;
       } else {
         pane.importState(state);
+        pane.refresh();
+
+        renderer.toneMapping = effects.toneMapping.method;
+        if (effects.sobelShader?.shader?.uniforms?.resolution?.value) {
+          effects.sobelShader.shader.uniforms.resolution.value.x =
+            window.innerWidth * window.devicePixelRatio;
+          effects.sobelShader.shader.uniforms.resolution.value.y =
+            window.innerHeight * window.devicePixelRatio;
+        }
+
+        composer = effects.applyPostProcessing(scene, renderer, camera, composer);
+        engine.composer = composer;
       } 
+    };
+
+    engine.refreshSettingsUI = () => {
+      if (!pane) {
+        return;
+      }
+      pane.refresh();
     };
   };
 
