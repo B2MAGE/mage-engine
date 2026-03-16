@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  
+  <head>
+    <title>MAGE</title>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/png" href="resources/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="resources/favicon.svg" />
+    <link rel="shortcut icon" href="resources/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="resources/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="MAGE" />
+    <link rel="manifest" href="resources/site.webmanifest" />
+    <!-- import the webpage's stylesheet -->
+    <link rel="stylesheet" href="style.css">
+  </head>  
+  <body>
+    <div class="ui_buttons centerx" display="style: none">
+      <abbr title-card="REGENERATE VISUALIZER">
+        <div class="ui ui_button_small" id="ui_regenerate"><img src="./resources/regenerate_ui.png"></div>
+      </abbr>
+      <abbr title-card="SAVE SCENE AS PRESET">
+        <div class="ui ui_button_small" id="ui_save"><img src="./resources/save_ui.png"></div>
+      </abbr>
+      <abbr title-card="DELETE SCENE FROM PRESETS">
+        <div class="ui ui_button_small" id="ui_delete"><img src="./resources/delete_ui.png"></div>
+      </abbr>
+      <abbr title-card="UPLOAD MUSIC TO VISUALIZER">
+        <div class="ui ui_button_small" id="ui_upload"><img src="./resources/upload_ui.png"></div>
+      </abbr>
+      <abbr title-card="HIDE ALL UI (INCLUDES MOUSE TIPS)">
+        <div class="ui ui_button_small" id="ui_hide"><img src="./resources/hide_ui.png"></div>
+      </abbr>
+      <abbr title-card="MORE SETTINGS">
+        <div class="ui ui_button_small" id="ui_settings"><img src="./resources/settings_ui.png"></div>
+      </abbr>
+      <abbr title-card="COPY SCENE DATA">
+        <div class="ui ui_button_small" id="ui_copy"><img src="./resources/copy_ui.png"></div>
+      </abbr>
+      <abbr title-card="LOAD SCENE DATA">
+        <div class="ui ui_button_small" id="ui_load"><img src="./resources/load_ui.png"></div>
+      </abbr>
+  </div>
+  <div class="ui_bgs centery EDITMODE" style="top: 265px;"> 
+    <!-- insert song presets with javascript here -->
+  </div>
+    <script src="https://mrdoob.github.io/stats.js/build/stats.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+      <input type="file" id="file" style="display: none;"/>
+      <audio id="audio" style="display: none;" controls>
+        <source src="" id="src" />
+      </audio>
+    <script src="https://mrdoob.github.io/stats.js/build/stats.min.js"></script>
+    <script async src="https://unpkg.com/tweakpane-plugin-audio-player@0.0.2/dist/tweakpane-plugin-audio-player.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@latest/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@latest/examples/jsm/"
+                "shader-park-core": "https://unpkg.com/shader-park-core/dist/shader-park-core.esm.js"
+              }
+        }
+    </script>
+    <script src="./js/index.js" type="module"></script>
+    <script src="./js/generateshaderparkcode.js" type="module"></script>
+  </body>
+</html>

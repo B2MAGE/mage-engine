@@ -1,0 +1,37 @@
+
+  setMaxIterations(99);
+  setStepSize(0.47969940912508235);
+
+  let size = input();
+  let pointerDown = input();
+  time *= 0.2714789626408971; // Randomize time multiplier between 0.1 and 1
+  rotateY(mouse.x * -5 * PI / 2 + time - (pointerDown + 0.1));
+  rotateX(mouse.y * 5 * PI / 2 + time);
+
+  // Set color
+  color(0.366274482991066, 0.02066809736039832, 0.37080002128328315);
+
+  // Get the current coordinate space once and store in s
+  let s = getSpace();
+
+  // Add rotations
+  rotateX(getRayDirection().y * 2.0493450750536613 + time);
+  rotateY(getRayDirection().x * 1.13465587018612 + time);
+  rotateZ(getRayDirection().z * 1.0249620865694404 + time);
+
+  // Apply metal and shine
+  metal(0.7763426710694199 * size);
+  shine(0.32984398593715997);
+
+  // Render the shapes
+  expand(noise(s * 1.6134312619689983) * 0.4896332309485495); torus(size * 0.6397401030881548 - pointerDown * 0.05, size * 0.6397401030881548 - pointerDown * 0.05 / 4);
+boxFrame(vec3(size * 0.95122782080147 - pointerDown * 0.05), size * 0.95122782080147 - pointerDown * 0.05 * 0.1);
+expand(noise(s * 0.5685806071242299) * 0.16676152514266207); boxFrame(vec3(size * 0.6307729442744892 - pointerDown * 0.05), size * 0.6307729442744892 - pointerDown * 0.05 * 0.1);
+expand(noise(s * 1.424782244606702) * 0.3200791630855785); torus(size * 0.7116206122937636 - pointerDown * 0.05, size * 0.7116206122937636 - pointerDown * 0.05 / 4);
+boxFrame(vec3(size * 0.80212532232486 - pointerDown * 0.05), size * 0.80212532232486 - pointerDown * 0.05 * 0.1);
+
+  // Apply blending
+  blend(nsin(time * size) * 0.26993933611163745);
+
+  // Extra shape
+  boxFrame(vec3(size * 0.7), size * 0.05);
