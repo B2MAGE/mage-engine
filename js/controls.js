@@ -89,7 +89,24 @@ export function initControls(engine) {
   };
 
   const initTweakpane = () => {
-    pane = new Pane();
+    const host = engine.canvas?.parentElement || renderer.domElement.parentElement || document.body;
+
+    // Ensure host can anchor absolutely-positioned children
+    if (getComputedStyle(host).position === 'static') {
+      host.style.position = 'relative';
+    }
+
+    const paneMount = document.createElement('div');
+    paneMount.className = 'mage-pane-host';
+    Object.assign(paneMount.style, {
+      position: 'absolute',
+      top: '8px',
+      right: '8px',
+      zIndex: '20',
+    });
+    host.appendChild(paneMount);
+
+    pane = new Pane({ container: paneMount });
 
     pane
       .addButton({
@@ -106,17 +123,17 @@ export function initControls(engine) {
       skyboxOptions[`${i}`] = i;
     }
 
-    // pane
-    //   .addBinding(visualizer, 'skyboxPreset', {
-    //     label: 'Skybox',
-    //     options: skyboxOptions,
-    //   })
-    //   .on('change', () => {
-    //     engine.loadSkybox({
-    //       type: 'preset',
-    //       presetId: Number.parseInt(`${visualizer.skyboxPreset}`, 10) || 0,
-    //     });
-    //   });
+    pane
+      .addBinding(visualizer, 'skyboxPreset', {
+        label: 'Skybox',
+        options: skyboxOptions,
+      })
+      .on('change', () => {
+        engine._loadSkybox({
+          type: 'preset',
+          presetId: Number.parseInt(`${visualizer.skyboxPreset}`, 10) || 0,
+        });
+      });
 
     const firstTab = pane.addTab({
       pages: [{ title: 'Scene Settings' }, { title: 'Post Processing' }],
@@ -393,6 +410,14 @@ export function initControls(engine) {
       }
       return pane.exportState();
     };
+
+    engine.importSettingsState = state => {
+      if (!pane) {
+        return;
+      } else {
+        pane.importState(state);
+      } 
+    };
   };
 
   const getOS = () => {
@@ -420,9 +445,9 @@ export function initControls(engine) {
   };
 
   const toggleUI = () => {
-    const buttonsContainer = document.querySelector('.ui_buttons');
-    buttonsContainer.style.display =
-      buttonsContainer.style.display === 'flex' ? 'none' : 'flex';
+    // const buttonsContainer = document.querySelector('.ui_buttons');
+    // buttonsContainer.style.display =
+    //   buttonsContainer.style.display === 'flex' ? 'none' : 'flex';
   };
 
   const switchControls = () => {
@@ -433,41 +458,6 @@ export function initControls(engine) {
     toggleUI();
     const hideUIbutton = document.getElementById('ui_hide');
     hideUIbutton.style.display = 'none';
-  };
-
-  const bundleSceneIntoJSON = () => {
-    const preset = engine.toPreset({ includeState: false });
-    if (pane) {
-      preset.settings = pane.exportState();
-    }
-    return JSON.stringify(preset);
-  };
-
-  const loadPresetIntoPane = (preset) => {
-    if (!preset || !preset.settings || !pane) {
-      return;
-    }
-
-    try {
-      pane.importState(preset.settings);
-    } catch (error) {
-      console.warn('Failed to import some preset settings', error);
-    }
-
-    composer = effects.applyPostProcessing(scene, renderer, camera, composer);
-    engine.composer = composer;
-    pane.refresh();
-  };
-
-  const previousOnPresetLoaded = engine.onPresetLoaded;
-  engine.onPresetLoaded = preset => {
-    if (typeof previousOnPresetLoaded === 'function') {
-      previousOnPresetLoaded(preset);
-    }
-
-    loadPresetIntoPane(preset);
-    audio = engine.audio;
-    reversedAudio = engine.reversedAudio;
   };
 
   const eventSetup = () => {
@@ -602,36 +592,10 @@ export function initControls(engine) {
     });
   };
 
-  const removePresetButtonsUI = () => {
-    const presetContainer = document.querySelector('.ui_bgs');
-    if (presetContainer) {
-      presetContainer.style.display = 'none';
-    }
-
-    const presetButtons = ['ui_save', 'ui_delete', 'ui_copy'];
-    presetButtons.forEach(id => {
-      const button = document.getElementById(id);
-      if (button) {
-        button.style.display = 'none';
-      }
-    });
-  };
-
-  const selectNextPreset = () => {
-    engine.loadVisualizer(true);
-  };
-
   initTweakpane();
   eventSetup();
-  //removePresetButtonsUI();
-
   if (getOS() !== ('Windows' || 'Mac OS' || 'Linux')) {
     switchControls();
   }
-
-  return {
-    pane,
-    selectNextPreset,
-    exportPresetJSON: bundleSceneIntoJSON,
-  };
+  return pane;
 }

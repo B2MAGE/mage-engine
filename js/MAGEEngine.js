@@ -37,12 +37,16 @@ export class MAGEPreset {
     controls = null,
     settings = null,
     state = null,
+    intent = null,
+    fx = null,
     visualizer = null,
     audioPath = null,
   } = {}) {
     this.controls = controls;
     this.settings = settings;
     this.state = state;
+    this.intent = intent;
+    this.fx = fx;
     this.visualizer = visualizer;
     this.audioPath = audioPath;
   }
@@ -71,6 +75,8 @@ export class MAGEPreset {
       controls: data.controls ?? null,
       settings: data.settings ?? null,
       state: data.state ?? null,
+      intent: data.intent ?? null,
+      fx: data.fx ?? null,
       visualizer: data.visualizer ?? null,
       audioPath: data.audioPath ?? data.audio ?? null,
     });
@@ -278,13 +284,21 @@ export class MAGEEngine {
     if (preset.state) {
       this._applyStatePatch(preset.state, { applied: [], warnings: [] });
     }
+
+    if (preset.intent) {
+      this._applyCompactIntent(preset.intent);
+    }
+
+    if (preset.fx) {
+      this._applyCompactFx(preset.fx);
+    }
     
     if (preset.controls) {
       this._loadControls(preset.controls);
     }
 
     if (preset.visualizer) {
-      if (preset.visualizer.skyboxPreset) {
+      if (preset.visualizer.skyboxPreset !== undefined && preset.visualizer.skyboxPreset !== null) {
         const normalizedSkybox = this._normalizeSkyboxInput(preset.visualizer.skyboxPreset);
         if (normalizedSkybox) {
           this._loadSkybox(normalizedSkybox);
@@ -304,14 +318,8 @@ export class MAGEEngine {
     //   this.loadAudio(preset.audioPath);
     // }
 
-    if (preset.settings && typeof this.exportSettingsState === 'function') {
+    if (typeof this.importSettingsState === 'function' && preset.settings) {
       this.importSettingsState(preset.settings);
-    }
-
-    this.onPresetLoaded(preset);
-
-    if (options.log !== false) {
-      console.info('[MAGEEngine.loadPreset] Preset loaded successfully', { preset });
     }
 
     return preset;
@@ -410,7 +418,7 @@ export class MAGEEngine {
   //   return report;
   // }
 
-  toPreset({ includeState = false, includeSettings = true } = {}) {
+  toPreset({ includeState = false, includeSettings = true, schema = 'compact' } = {}) {
     if (this.controls && this.controls.saveState) {
       this.controls.saveState();
     }
@@ -428,6 +436,7 @@ export class MAGEEngine {
         shader: this.visualizer.shader,
         skyboxPreset: this.visualizer.skyboxPreset,
         scale: this.visualizer.scale,
+        render_tooltips: this.visualizer.render_tooltips,
       },
       controls: controlsState,
     };
@@ -435,7 +444,7 @@ export class MAGEEngine {
     if (includeSettings) {
       try {
         const settings = this.exportSettingsState();
-        if (settings) {
+        if (typeof this.exportSettingsState === 'function' && settings) {
           preset.settings = settings;
         }
       } catch (error) {
@@ -449,9 +458,149 @@ export class MAGEEngine {
       preset.state = { ...this.state };
     }
 
+    if (schema === 'compact') {
+      return this._toCompactPreset({ includeState });
+    }
+
     preset.version = MAGE_VERSION;
 
     return preset;
+  }
+
+  _toCompactPreset({ includeState = false } = {}) {
+    const compact = {
+      version: '2.0.0',
+      visualizer: {
+        shader: this.visualizer.shader,
+        skyboxPreset: this.visualizer.skyboxPreset,
+        scale: this.visualizer.scale,
+      },
+      controls: this.controls
+        ? {
+            target0: this.controls.target0,
+            position0: this.controls.position0,
+            zoom0: this.controls.zoom0,
+          }
+        : null,
+      intent: {
+        time_multiplier: this.state.time_multiplier,
+        minimizing_factor: this.state.minimizing_factor,
+        power_factor: this.state.power_factor,
+        pointerDownMultiplier: this.state.pointerDownMultiplier,
+        base_speed: this.state.base_speed,
+        easing_speed: this.state.easing_speed,
+        camTilt: this.state.camTilt,
+        autoRotate: this.controls?.autoRotate,
+        autoRotateSpeed: this.controls?.autoRotateSpeed,
+        fov: this.camera?.fov,
+      },
+      fx: {
+        bloom: {
+          enabled: effects.bloom.enabled,
+          strength: effects.bloom.settings.strength,
+          radius: effects.bloom.settings.radius,
+          threshold: effects.bloom.settings.threshold,
+        },
+        toneMapping: {
+          method: effects.toneMapping.method,
+          exposure: this.renderer?.toneMappingExposure,
+        },
+        passes: {
+          rgbShift: effects.RGBShift.enabled,
+          dot: effects.dotShader.enabled,
+          technicolor: effects.technicolorShader.enabled,
+          luminosity: effects.luminosityShader.enabled,
+          afterImage: effects.afterImagePass.enabled,
+          sobel: effects.sobelShader.enabled,
+          glitch: effects.glitchPass.enabled,
+          colorify: effects.colorifyShader.enabled,
+          halftone: effects.halftonePass.enabled,
+          gammaCorrection: effects.gammaCorrectionShader.enabled,
+          kaleid: effects.kaleidoShader.enabled,
+          outputPass: effects.outputPass.enabled,
+        },
+      },
+    };
+
+    if (includeState) {
+      compact.state = { ...this.state };
+    }
+
+    return compact;
+  }
+
+  _applyCompactIntent(intent) {
+    if (!intent || typeof intent !== 'object') {
+      return;
+    }
+
+    this._applyStatePatch(intent, { applied: [], warnings: [] });
+
+    if (this.controls) {
+      if (typeof intent.autoRotate === 'boolean') {
+        this.controls.autoRotate = intent.autoRotate;
+      }
+      if (typeof intent.autoRotateSpeed === 'number' && Number.isFinite(intent.autoRotateSpeed)) {
+        this.controls.autoRotateSpeed = intent.autoRotateSpeed;
+      }
+    }
+
+    if (this.camera && typeof intent.fov === 'number' && Number.isFinite(intent.fov)) {
+      this.camera.fov = intent.fov;
+      this.camera.updateProjectionMatrix();
+    }
+
+    if (typeof intent.camTilt === 'number' && Number.isFinite(intent.camTilt) && this.camera) {
+      this.camera.up.set(
+        Math.sin(intent.camTilt),
+        Math.cos(intent.camTilt),
+        -Math.sin(intent.camTilt),
+      );
+    }
+  }
+
+  _applyCompactFx(fx) {
+    if (!fx || typeof fx !== 'object') {
+      return;
+    }
+
+    if (fx.bloom && typeof fx.bloom === 'object') {
+      if (typeof fx.bloom.enabled === 'boolean') effects.bloom.enabled = fx.bloom.enabled;
+      if (typeof fx.bloom.strength === 'number' && Number.isFinite(fx.bloom.strength)) effects.bloom.settings.strength = fx.bloom.strength;
+      if (typeof fx.bloom.radius === 'number' && Number.isFinite(fx.bloom.radius)) effects.bloom.settings.radius = fx.bloom.radius;
+      if (typeof fx.bloom.threshold === 'number' && Number.isFinite(fx.bloom.threshold)) effects.bloom.settings.threshold = fx.bloom.threshold;
+    }
+
+    if (fx.toneMapping && typeof fx.toneMapping === 'object') {
+      if (typeof fx.toneMapping.method === 'number' && Number.isFinite(fx.toneMapping.method)) {
+        effects.toneMapping.method = fx.toneMapping.method;
+        if (this.renderer) {
+          this.renderer.toneMapping = fx.toneMapping.method;
+        }
+      }
+      if (typeof fx.toneMapping.exposure === 'number' && Number.isFinite(fx.toneMapping.exposure) && this.renderer) {
+        this.renderer.toneMappingExposure = fx.toneMapping.exposure;
+      }
+    }
+
+    if (fx.passes && typeof fx.passes === 'object') {
+      if (typeof fx.passes.rgbShift === 'boolean') effects.RGBShift.enabled = fx.passes.rgbShift;
+      if (typeof fx.passes.dot === 'boolean') effects.dotShader.enabled = fx.passes.dot;
+      if (typeof fx.passes.technicolor === 'boolean') effects.technicolorShader.enabled = fx.passes.technicolor;
+      if (typeof fx.passes.luminosity === 'boolean') effects.luminosityShader.enabled = fx.passes.luminosity;
+      if (typeof fx.passes.afterImage === 'boolean') effects.afterImagePass.enabled = fx.passes.afterImage;
+      if (typeof fx.passes.sobel === 'boolean') effects.sobelShader.enabled = fx.passes.sobel;
+      if (typeof fx.passes.glitch === 'boolean') effects.glitchPass.enabled = fx.passes.glitch;
+      if (typeof fx.passes.colorify === 'boolean') effects.colorifyShader.enabled = fx.passes.colorify;
+      if (typeof fx.passes.halftone === 'boolean') effects.halftonePass.enabled = fx.passes.halftone;
+      if (typeof fx.passes.gammaCorrection === 'boolean') effects.gammaCorrectionShader.enabled = fx.passes.gammaCorrection;
+      if (typeof fx.passes.kaleid === 'boolean') effects.kaleidoShader.enabled = fx.passes.kaleid;
+      if (typeof fx.passes.outputPass === 'boolean') effects.outputPass.enabled = fx.passes.outputPass;
+    }
+
+    if (this.composer) {
+      this.composer = effects.applyPostProcessing(this.scene, this.renderer, this.camera, this.composer);
+    }
   }
 
   // PRIVATE METHODS
@@ -743,12 +892,11 @@ export class MAGEEngine {
       rotateSpeed: 0.5,
     });
     this.controls.enabledamping = true;
-    // this.controls.autoRotate = this.state.rotate_toggle;
-    // this.controls.autoRotateSpeed = this.state.rotate_speed;
+    this.controls.autoRotate = true;
+    this.controls.autoRotateSpeed = 0.2;
     this.controls.saveState();
 
     this._syncViewport(true);
-
   }
 
   _loadControls(presetControls) {
