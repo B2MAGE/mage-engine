@@ -166,8 +166,9 @@ textarea {
   <input type="file" id="file" style="display:none;" />
 
   <script type="module">
-    import { initMAGE } from "./js/mage-lib.js";
+    import { initMAGE } from "./mage-engine.mjs";
     window.addEventListener('load', () => {
+      
         const logEl = document.getElementById('log');
         const log = message => {
         const line = `[${new Date().toLocaleTimeString()}] ${message}`;
