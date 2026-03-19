@@ -84,12 +84,106 @@ export class MAGEPreset {
   }
 }
 
+class MAGEVisualizer {
+  constructor(engine) {
+    this.engine = engine;
+    this.shaderIndex = -1;
+    this.shaders = [];
+    this.skyboxPreset = null;
+    this.mesh = null;
+    this.shader = null;
+    this.scale = 10.0;
+    this.intersected = false;
+    this.clickable = false;
+    this.controllingAudio = false;
+    this.render_tooltips = true;
+  }
+
+  load(shaderCode, insertIntoArray = false) {
+    const engine = this.engine;
+    if (engine.log) console.log('Loading visualizer... ');
+
+    // Remove old mesh before creating a new sculpture.
+    if (this.mesh && engine.scene) {
+      engine.scene.remove(this.mesh);
+    }
+
+    // If shader input is missing/invalid, generate one.
+    let finalShaderCode = null;
+    if (typeof shaderCode === 'string') {
+      finalShaderCode = shaderCode;
+    } else if (
+      shaderCode &&
+      typeof shaderCode === 'object' &&
+      typeof shaderCode.shader === 'string'
+    ) {
+      finalShaderCode = shaderCode.shader;
+    } else {
+      finalShaderCode = generateshaderparkcode('generator_v1.1');
+    }
+
+    if (insertIntoArray) {
+      this.shaders.push({
+        id: engine._idFromShaderCode(finalShaderCode),
+        shader: finalShaderCode,
+        timestamp: Date.now(),
+      });
+      this.shaderIndex = this.shaders.length - 1;
+      if (engine.log) console.log('Active shaders: ', this.shaders);
+    }
+
+    if (engine.log) console.log('Loaded visualizer with shader:', finalShaderCode);
+    this.shader = finalShaderCode;
+    engine._createMeshes();
+    return finalShaderCode;
+  }
+
+  // go to previous index or wrap around to the end if at the beginning
+  previousShader() {
+    if (this.shaders.length <= 1) {
+      return;
+    }
+    let nextShader;
+    if (this.shaderIndex <= 0) {
+      this.engine._showViewportMessage(`No previous shaders.`, 25);
+      return;
+    } else {
+      nextShader = this.shaders[this.shaderIndex - 1];
+      this.shaderIndex--;
+    }
+    this.load(nextShader.shader, false);
+    this.engine._showViewportMessage(`Loading previous shader...`, 25);
+    return;
+  }
+
+  nextShader() {
+    if (this.shaders.length <= 1) {
+      return;
+    }
+    let nextShader;
+    if (this.shaderIndex >= this.shaders.length - 1) {
+      this.engine._showViewportMessage(`No more shaders.`, 25);
+      return;
+    } else {
+      nextShader = this.shaders[this.shaderIndex + 1];
+      this.shaderIndex++;
+    }
+    this.load(nextShader.shader, false);
+    this.engine._showViewportMessage(`Loading next shader...`, 25);
+    return;
+  }
+}
+
 // Core runtime for MAGE - responsible for managing Three.js scene, camera, renderer, audio, visualizer state, and more.
 export class MAGEEngine {
-  constructor(canvas) {
+  constructor(canvas, options = {log: false}) {
+    // console log version
+    console.log(`Initializing MAGE Engine v${MAGE_VERSION}...`);
+
     // Optional HTMLCanvasElement to render into. If not provided, a canvas
     // will be created and appended to document.body, matching current behavior.
     this.canvas = canvas || null;
+    this.log = options.log || false;
 
     // Core Three.js objects
     this.scene = null;
@@ -111,28 +205,7 @@ export class MAGEEngine {
     this.playbackTime = 0;
     this.isReversed = false;
 
-    // Visualizer state (mirrors existing index.js structures)
-    this.visualizer = {
-      skyboxPreset: null,
-      mesh: null,
-      shader: null,
-      scale: 10.0,
-      intersected: false,
-      clickable: false,
-      controllingAudio: false,
-      render_tooltips: true,
-    };
-
-    this.shaders = [
-      'default',
-      'dev',
-      'og',
-      'react',
-      'example',
-      'test',
-      'test2',
-      'test3',
-    ];
+    this.visualizer = new MAGEVisualizer(this);
 
     this.inputs = {
       currMouse: new Vector3(),
@@ -169,6 +242,13 @@ export class MAGEEngine {
     this.refreshSettingsUI = null;
     this.viewportWidth = 0;
     this.viewportHeight = 0;
+    this.viewportToast = {
+      el: null,
+      visible: false,
+      shownAt: 0,
+      durationMs: 1000,
+      fadeMs: 700,
+    };
 
     // Bind render loop so we can use it with requestAnimationFrame
     this._render = this._render.bind(this);
@@ -295,7 +375,7 @@ export class MAGEEngine {
         }
       }
       if (preset.visualizer.shader) {
-        this._loadVisualizer(preset.visualizer.shader);
+        this.visualizer.load(preset.visualizer.shader, insertIntoArray = true);
       }
       if (typeof preset.visualizer.scale === 'number') {
         this.visualizer.scale = preset.visualizer.scale;
@@ -335,6 +415,24 @@ export class MAGEEngine {
     return preset;
   }
 
+  // PRIVATE METHODS
+
+  _showViewportMessage(message, durationMs = 1000) {
+    this._ensureViewportToast();
+    if (!this.viewportToast.el) {
+      return;
+    }
+
+    this.viewportToast.durationMs =
+      Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 1000;
+    this.viewportToast.shownAt = performance.now();
+    this.viewportToast.visible = true;
+
+    this.viewportToast.el.textContent = String(message ?? '');
+    this.viewportToast.el.style.opacity = '1';
+    this.viewportToast.el.style.display = 'block';
+  }
+
   _syncPostProcessingFromState() {
     if (!this.renderer || !this.scene || !this.camera) {
       return;
@@ -345,55 +443,6 @@ export class MAGEEngine {
     if (this.composer) {
       this.composer = effects.applyPostProcessing(this.scene, this.renderer, this.camera, this.composer);
     }
-  }
-
-  toPreset({ includeState = false, includeSettings = true, schema = 'compact' } = {}) {
-    if (this.controls && this.controls.saveState) {
-      this.controls.saveState();
-    }
-
-    const controlsState = this.controls
-      ? {
-          target0: this.controls.target0,
-          position0: this.controls.position0,
-          zoom0: this.controls.zoom0,
-        }
-      : null;
-
-    const preset = {
-      visualizer: {
-        shader: this.visualizer.shader,
-        skyboxPreset: this.visualizer.skyboxPreset,
-        scale: this.visualizer.scale,
-        render_tooltips: this.visualizer.render_tooltips,
-      },
-      controls: controlsState,
-    };
-
-    if (includeSettings) {
-      try {
-        const settings = this.exportSettingsState();
-        if (typeof this.exportSettingsState === 'function' && settings) {
-          preset.settings = settings;
-        }
-      } catch (error) {
-        console.warn('[MAGEEngine.toPreset] Failed to export settings state', error);
-      }
-    }
-
-    console.log('Generated preset from current state:', preset);
-
-    if (includeState) {
-      preset.state = { ...this.state };
-    }
-
-    if (schema === 'compact') {
-      return this._toCompactPreset({ includeState });
-    }
-
-    preset.version = MAGE_VERSION;
-
-    return preset;
   }
 
   _toCompactPreset({ includeState = false } = {}) {
@@ -584,8 +633,6 @@ export class MAGEEngine {
       this.composer = effects.applyPostProcessing(this.scene, this.renderer, this.camera, this.composer);
     }
   }
-
-  // PRIVATE METHODS
 
   _coercePresetInput(presetInput, report) {
     if (presetInput instanceof MAGEPreset) {
@@ -830,6 +877,49 @@ export class MAGEEngine {
     }
   }
 
+  _ensureViewportToast() {
+    if (this.viewportToast.el && document.body.contains(this.viewportToast.el)) {
+      return;
+    }
+
+    const host =
+      this.canvas?.parentElement ||
+      this.renderer?.domElement?.parentElement ||
+      document.body;
+
+    if (host && getComputedStyle(host).position === 'static') {
+      host.style.position = 'relative';
+    }
+
+    const toast = document.createElement('div');
+    Object.assign(toast.style, {
+      position: 'absolute',
+      left: '50%',
+      top: '50%',
+      transform: 'translate(-50%, -50%)',
+      zIndex: '30',
+      pointerEvents: 'none',
+      borderRadius: '999px',
+      border: '1px solid rgba(255, 255, 255, 0.25)',
+      background: 'rgba(8, 12, 16, 0.64)',
+      color: '#ffffff',
+      fontFamily: 'ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif',
+      fontSize: '14px',
+      fontWeight: '600',
+      lineHeight: '1.2',
+      letterSpacing: '0.015em',
+      whiteSpace: 'nowrap',
+      padding: '10px 14px',
+      boxShadow: '0 12px 40px rgba(0, 0, 0, 0.35)',
+      opacity: '0',
+      display: 'none',
+      transition: 'opacity 140ms linear',
+    });
+
+    host.appendChild(toast);
+    this.viewportToast.el = toast;
+  }
+
   _createScene() {
     const { width, height } = this._getViewportSize();
 
@@ -878,6 +968,8 @@ export class MAGEEngine {
     this.controls.autoRotateSpeed = 0.2;
     this.controls.saveState();
 
+    this._ensureViewportToast();
+
     this._syncViewport(true);
   }
 
@@ -892,37 +984,26 @@ export class MAGEEngine {
   }
 
   _loadDefaultVisualizer() {
-    console.log('Loading visualizer... ');
-
-    // remove old mesh
-    if (this.visualizer.mesh && this.scene) {
-      this.scene.remove(this.visualizer.mesh);
-    }
-    
     // SHADER
-    this.visualizer.shader = generateshaderparkcode('default');
+    this.visualizer.load(generateshaderparkcode('default'), true);
     this._loadSkybox({ type: 'preset', presetId: 0 });
-    this._createMeshes();
   }
 
-  _loadVisualizer(shader_code) {
-    console.log('Loading visualizer... ');
-
-    // remove old mesh
-    if (this.visualizer.mesh && this.scene) {
-      this.scene.remove(this.visualizer.mesh);
+  _idFromShaderCode(shaderCode) {
+    // Simple hash function to generate a unique ID from shader code
+    let hash = 0;
+    for (let i = 0; i < shaderCode.length; i++) {
+      const char = shaderCode.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash |= 0; // Convert to 32bit integer
     }
-
-    // SHADER
-    this.visualizer.shader = shader_code ?? generateshaderparkcode('default');
-
-    this._createMeshes();
+    return `shader_${Math.abs(hash)}`;
   }
 
   _loadSkybox({type, presetId}) {
     const { resolvedPath, skyboxId } = this._resolveSkyboxPath({ type: type, presetId: presetId });
     if (!resolvedPath) {
-      console.log('No valid skybox input provided:', presetId);
+      if (this.log) console.log('No valid skybox input provided:', presetId);
       return;
     }
 
@@ -979,7 +1060,7 @@ export class MAGEEngine {
     });
     this.rtScene.add(targetMesh);
 
-    console.log('Visualizer Loaded!');
+    if (this.log) console.log('Visualizer Loaded!');
   }
 
   _render() {
@@ -1091,6 +1172,21 @@ export class MAGEEngine {
       } else {
         this.visualizer.intersected = false;
         this.visualizer.clickable = false;
+      }
+    }
+
+    if (this.viewportToast.el && this.viewportToast.visible) {
+      const elapsedMs = performance.now() - this.viewportToast.shownAt;
+      if (elapsedMs <= this.viewportToast.durationMs) {
+        this.viewportToast.el.style.opacity = '1';
+      } else if (elapsedMs <= this.viewportToast.durationMs + this.viewportToast.fadeMs) {
+        const fadeProgress =
+          (elapsedMs - this.viewportToast.durationMs) / this.viewportToast.fadeMs;
+        this.viewportToast.el.style.opacity = `${Math.max(0, 1 - fadeProgress)}`;
+      } else {
+        this.viewportToast.visible = false;
+        this.viewportToast.el.style.opacity = '0';
+        this.viewportToast.el.style.display = 'none';
       }
     }
 

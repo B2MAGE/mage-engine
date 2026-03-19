@@ -758,7 +758,7 @@ return shaderCode;
 
 
   } else
-    if (shader == 'generated-good-draft') {
+    if (shader == 'generator_v1.1') {
       // Define parameters and randomization logic
       const shapeChoices = ['sphere', 'boxFrame', 'torus', 'cylinder', 'grid'];
       const numShapes = Math.floor(Math.random() * 4) + 2;  // Random number of shapes between 2 and 5

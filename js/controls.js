@@ -592,6 +592,24 @@ export function initControls(engine, options = {}) {
       }
     };
 
+    window.addEventListener('wheel', function(event) {
+        if (event.deltaY < 0) {
+            // If the visualizer is clickable and the pointer is currently intersecting it, go to the next shader
+            if (visualizer.clickable && visualizer.intersected) {
+              visualizer.nextShader();
+            }
+        } else if (event.deltaY > 0) {
+            // If the visualizer is clickable and the pointer is currently intersecting it, go to the previous shader
+            if (visualizer.clickable && visualizer.intersected) {
+              visualizer.previousShader();
+            }
+        }
+        // You can also check event.deltaX for horizontal scrolling
+
+        // If you do not want any actual scrolling to occur, you can prevent the default behavior
+        // event.preventDefault(); 
+    }, { passive: false }); // Use passive: false to allow preventDefault()
+
     window.addEventListener('resize', () => {
       if (typeof engine._syncViewport === 'function') {
         engine._syncViewport(true);
@@ -643,10 +661,12 @@ export function initControls(engine, options = {}) {
         return;
       }
 
-      controls.enabled = false;
-      if (event.button === 1) {
-        visualizer.controllingAudio = true;
-      }
+      // stop threejs movement controls while interacting with visualizer
+      //controls.enabled = false;
+      
+      // if (event.button === 1) {
+      //   visualizer.controllingAudio = true;
+      // }
 
       if (event.button === 2) {
         const tooltipImage = tooltipUI.element.querySelector('img');
@@ -663,64 +683,200 @@ export function initControls(engine, options = {}) {
     });
 
     window.addEventListener('pointerup', event => {
+      // stop controlling audio on pointer release
       visualizer.controllingAudio = false;
+
+      // re-enable threejs movement controls when not interacting with visualizer
       controls.enabled = true;
-      if (audio && audio.setPlaybackRate) {
-        audio.setPlaybackRate(1);
-      }
-      if (reversedAudio && reversedAudio.pause) {
-        reversedAudio.pause();
-      }
+
+      // if (audio && audio.setPlaybackRate) {
+      //   audio.setPlaybackRate(1);
+      // }
+      // if (reversedAudio && reversedAudio.pause) {
+      //   reversedAudio.pause();
+      // }
+
+      // Reset pointer down state with a slight delay to allow for any interactions that check this state on pointer up.
       state.currPointerDown = 0.0 + 1 * state.pointerDownMultiplier;
 
+      // Only toggle play/pause on middle click release while pointer is intersecting visualizer and it's clickable.
+      // This prevents conflicts with right click (context menu) interactions and ensures that play/pause is only 
+      // toggled when the user is actively interacting with the visualizer.
       if (!visualizer.intersected || !visualizer.clickable) {
         return;
       }
 
+      // if (event.button === 0) {
+      //   if (!audio || !audio.isPlaying) {
+      //     engine.play();
+      //   } else {
+      //     engine.pause();
+      //   }
+      // }
+
+      // Regenerate visualizer on left click release while intersecting visualizer and it's clickable
       if (event.button === 0) {
-        if (!audio || !audio.isPlaying) {
-          engine.play();
-        } else {
-          engine.pause();
-        }
+        engine.visualizer.load(null ,true);
       }
 
+      // Open shaders context menu on middle click release while intersecting visualizer and it's clickable 
       if (event.button === 1) {
-        if (reversedAudio && reversedAudio.pause) {
-          reversedAudio.pause();
-        }
-        engine.play();
-      }
-    });
+        // if (reversedAudio && reversedAudio.pause) {
+        //   reversedAudio.pause();
+        // }
+        // engine.play();
 
-    bindClick('ui_regenerate', () => {
-      engine.loadVisualizer();
-    });
-
-    bindClick('ui_upload', () => {
-      engine.loadAudio();
-      audio = engine.audio;
-      reversedAudio = engine.reversedAudio;
-    });
-
-    bindClick('ui_hide', () => {
-      const tooltipImage = tooltipUI.element.querySelector('img');
-      if (tooltipImage) {
-        tooltipImage.hidden = true;
-      }
-      visualizer.render_tooltips = false;
-      if (pane) {
-        pane.hidden = true;
-      }
-      toggleUI();
-    });
-
-    bindClick('ui_settings', () => {
-      if (pane) {
-        pane.hidden = !pane.hidden;
+        // open a selection window showing active shaders
+        // openShaderSelectionWindow(engine.visualizer);
       }
     });
   };
+
+  // const openShaderSelectionWindow = visualizer => {
+  //   if (!visualizer || !Array.isArray(visualizer.shaders) || visualizer.shaders.length === 0) {
+  //     window.alert('No saved shaders available yet. Load a shader preset first.');
+  //     return;
+  //   }
+
+  //   const existingOverlay = document.getElementById('mage-shader-picker-overlay');
+  //   if (existingOverlay) {
+  //     existingOverlay.remove();
+  //   }
+
+  //   const overlay = document.createElement('div');
+  //   overlay.id = 'mage-shader-picker-overlay';
+  //   Object.assign(overlay.style, {
+  //     position: 'fixed',
+  //     inset: '0',
+  //     zIndex: '10000',
+  //     background: 'rgba(0, 0, 0, 0.55)',
+  //     display: 'flex',
+  //     alignItems: 'center',
+  //     justifyContent: 'center',
+  //     padding: '12px',
+  //   });
+
+  //   const dialog = document.createElement('div');
+  //   Object.assign(dialog.style, {
+  //     width: 'min(640px, 96vw)',
+  //     maxHeight: '80vh',
+  //     overflow: 'auto',
+  //     borderRadius: '10px',
+  //     border: '1px solid rgba(255, 255, 255, 0.2)',
+  //     background: 'rgba(20, 24, 30, 0.95)',
+  //     color: '#fff',
+  //     padding: '14px',
+  //     fontFamily: 'sans-serif',
+  //   });
+
+  //   const title = document.createElement('div');
+  //   title.textContent = 'Select Shader by ID';
+  //   Object.assign(title.style, {
+  //     fontSize: '16px',
+  //     fontWeight: '600',
+  //     marginBottom: '10px',
+  //   });
+
+  //   const selector = document.createElement('select');
+  //   selector.size = Math.min(12, visualizer.shaders.length);
+  //   Object.assign(selector.style, {
+  //     width: '100%',
+  //     minHeight: '180px',
+  //     background: 'rgba(0, 0, 0, 0.35)',
+  //     color: '#fff',
+  //     border: '1px solid rgba(255, 255, 255, 0.25)',
+  //     borderRadius: '8px',
+  //     padding: '6px',
+  //   });
+
+  //   visualizer.shaders.forEach((shaderItem, index) => {
+  //     const option = document.createElement('option');
+  //     option.value = `${shaderItem.id}`;
+  //     const isActive = index === visualizer.shaderIndex;
+  //     option.textContent = `${isActive ? '* ' : ''}${shaderItem.id}`;
+  //     option.selected = isActive;
+  //     selector.appendChild(option);
+  //   });
+
+  //   const actions = document.createElement('div');
+  //   Object.assign(actions.style, {
+  //     display: 'flex',
+  //     justifyContent: 'flex-end',
+  //     gap: '8px',
+  //     marginTop: '12px',
+  //   });
+
+  //   const cancelButton = document.createElement('button');
+  //   cancelButton.type = 'button';
+  //   cancelButton.textContent = 'Cancel';
+  //   Object.assign(cancelButton.style, {
+  //     border: '1px solid rgba(255, 255, 255, 0.2)',
+  //     borderRadius: '6px',
+  //     background: 'transparent',
+  //     color: '#fff',
+  //     padding: '8px 10px',
+  //     cursor: 'pointer',
+  //   });
+
+  //   const applyButton = document.createElement('button');
+  //   applyButton.type = 'button';
+  //   applyButton.textContent = 'Apply';
+  //   Object.assign(applyButton.style, {
+  //     border: '1px solid rgba(255, 255, 255, 0.2)',
+  //     borderRadius: '6px',
+  //     background: '#2f6aff',
+  //     color: '#fff',
+  //     padding: '8px 10px',
+  //     cursor: 'pointer',
+  //   });
+
+  //   const closeDialog = () => {
+  //     overlay.remove();
+  //   };
+
+  //   const applySelectedShader = () => {
+  //     const selectedShaderId = selector.value;
+  //     const selectedIndex = visualizer.shaders.findIndex(
+  //       shaderItem => `${shaderItem.id}` === `${selectedShaderId}`,
+  //     );
+
+  //     if (selectedIndex < 0) {
+  //       return;
+  //     }
+
+  //     const selectedShader = visualizer.shaders[selectedIndex];
+  //     visualizer.shaderIndex = selectedIndex;
+  //     visualizer.load(selectedShader.shader, false);
+  //     closeDialog();
+  //   };
+
+  //   cancelButton.addEventListener('click', closeDialog);
+  //   applyButton.addEventListener('click', applySelectedShader);
+  //   selector.addEventListener('dblclick', applySelectedShader);
+  //   overlay.addEventListener('click', event => {
+  //     if (event.target === overlay) {
+  //       closeDialog();
+  //     }
+  //   });
+  //   document.addEventListener(
+  //     'keydown',
+  //     event => {
+  //       if (event.key === 'Escape' && document.body.contains(overlay)) {
+  //         closeDialog();
+  //       }
+  //     },
+  //     { once: true },
+  //   );
+
+  //   actions.appendChild(cancelButton);
+  //   actions.appendChild(applyButton);
+  //   dialog.appendChild(title);
+  //   dialog.appendChild(selector);
+  //   dialog.appendChild(actions);
+  //   overlay.appendChild(dialog);
+  //   document.body.appendChild(overlay);
+  //   selector.focus();
+  // };
 
   initTweakpane();
   eventSetup();
