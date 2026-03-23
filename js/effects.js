@@ -109,8 +109,28 @@ void main( out vec4 fragColor, in vec2 fragCoord )
 
 };
 
+const DEFAULT_PASS_ORDER = [
+  'glitchPass',
+  'bloom',
+  'RGBShift',
+  'dotShader',
+  'technicolorShader',
+  'luminosityShader',
+  'afterImagePass',
+  'sobelShader',
+  'colorifyShader',
+  'halftonePass',
+  'gammaCorrectionShader',
+  'kaleidoShader',
+  'copyShader',
+  'bleachBypassShader',
+  'toonShader',
+  'outputPass',
+];
+
 // threejs effects list
 let effects = {
+  passOrder : [...DEFAULT_PASS_ORDER],
   toneMapping : {
         exposure : 1.5,
         method : 0, // Default
@@ -221,6 +241,77 @@ let effects = {
     shader : new OutputPass(),
     enabled : true,
   },
+  getPassOrder : function() {
+    return [...this.passOrder];
+  },
+  getDefaultPassOrder : function() {
+    return [...DEFAULT_PASS_ORDER];
+  },
+  setPassOrder : function(nextOrder) {
+    if (!Array.isArray(nextOrder)) {
+      return false;
+    }
+
+    const requested = nextOrder.filter(value => typeof value === 'string');
+    const valid = requested.filter(
+      passId => this[passId] && typeof this[passId] === 'object' && this[passId].shader,
+    );
+
+    const seen = new Set();
+    const deduped = [];
+    for (const passId of valid) {
+      if (seen.has(passId)) {
+        continue;
+      }
+      seen.add(passId);
+      deduped.push(passId);
+    }
+
+    for (const passId of DEFAULT_PASS_ORDER) {
+      if (seen.has(passId)) {
+        continue;
+      }
+      if (this[passId] && typeof this[passId] === 'object' && this[passId].shader) {
+        seen.add(passId);
+        deduped.push(passId);
+      }
+    }
+
+    this.passOrder = deduped.filter(passId => passId !== 'outputPass');
+    this.passOrder.push('outputPass');
+    return true;
+  },
+  movePass : function(passId, direction) {
+    if (!passId || typeof passId !== 'string') {
+      return false;
+    }
+    if (passId === 'outputPass') {
+      return false;
+    }
+
+    const order = this.getPassOrder();
+    const index = order.indexOf(passId);
+    if (index < 0) {
+      return false;
+    }
+
+    const delta = direction === 'up' ? -1 : direction === 'down' ? 1 : 0;
+    if (delta === 0) {
+      return false;
+    }
+
+    const nextIndex = index + delta;
+    if (nextIndex < 0 || nextIndex >= order.length) {
+      return false;
+    }
+    if (order[nextIndex] === 'outputPass') {
+      return false;
+    }
+
+    [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
+    this.setPassOrder(order);
+    return true;
+  },
   applyPostProcessing : function(scene, renderer, camera, composer) {
     
     // CALL DISPOSE TO PREVENT MEM LEAKS
@@ -233,12 +324,14 @@ let effects = {
     let newComposer = new EffectComposer(renderer);
     newComposer.addPass(new RenderPass(scene, camera));
 
-    let allEffects = Object.keys(this); 
-  
-    allEffects.forEach(effect => {
-      if (this[`${effect}`].enabled) 
-        newComposer.addPass(this[`${effect}`].shader);
-        //composer.addPass(new RenderPass(scene, camera));
+    const orderedPassIds = this.getPassOrder();
+
+    orderedPassIds.forEach(passId => {
+      const passConfig = this[passId];
+      if (!passConfig || !passConfig.enabled) {
+        return;
+      }
+      newComposer.addPass(passConfig.shader);
     });
 
     return newComposer;

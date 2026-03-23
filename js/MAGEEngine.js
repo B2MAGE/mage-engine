@@ -5,7 +5,7 @@ import {
   PerspectiveCamera,
   WebGLRenderer,
   Color,
-  Clock,
+  Timer,
   AudioListener,
   Audio,
   AudioLoader,
@@ -30,6 +30,7 @@ import { createSculptureWithGeometry } from 'shader-park-core';
 import { generateshaderparkcode } from './generateshaderparkcode.js';
 import effects from './effects.js';
 import { reverseAudioBuffer } from './helpers.js';
+import { getEmbeddedSkyboxFaces } from './skyboxes.js';
 
 const MAGE_VERSION = '1.1.0';
 
@@ -97,9 +98,10 @@ class MAGEVisualizer {
     this.clickable = false;
     this.controllingAudio = false;
     this.render_tooltips = true;
+    this.centerClickRadiusNdc = 0.35;
   }
 
-  load(shaderCode, insertIntoArray = false) {
+  load(options = {shader: null, addToHistory: false, clearHistory: false}) {
     const engine = this.engine;
     if (engine.log) console.log('Loading visualizer... ');
 
@@ -110,8 +112,8 @@ class MAGEVisualizer {
 
     // If shader input is missing/invalid, generate one.
     let finalShaderCode = null;
-    if (typeof shaderCode === 'string') {
-      finalShaderCode = shaderCode;
+    if (typeof options.shader === 'string') {
+      finalShaderCode = options.shader;
     } else if (
       shaderCode &&
       typeof shaderCode === 'object' &&
@@ -121,8 +123,15 @@ class MAGEVisualizer {
     } else {
       finalShaderCode = generateshaderparkcode('generator_v1.1');
     }
-
-    if (insertIntoArray) {
+    if (!finalShaderCode) {
+      if (engine.log) console.warn('Invalid shader code input; failed to load visualizer.', { shaderCode });
+      return null;
+    }
+    if (options.clearHistory) {
+      this.shaders = [];
+      this.shaderIndex = -1;
+    }
+    if (options.addToHistory) {
       this.shaders.push({
         id: engine._idFromShaderCode(finalShaderCode),
         shader: finalShaderCode,
@@ -138,21 +147,20 @@ class MAGEVisualizer {
     return finalShaderCode;
   }
 
-  // go to previous index or wrap around to the end if at the beginning
   previousShader() {
     if (this.shaders.length <= 1) {
       return;
     }
     let nextShader;
     if (this.shaderIndex <= 0) {
-      this.engine._showViewportMessage(`No previous shaders.`, 25);
+      this.engine._showViewportMessage(`Reached first visualizer.`, 25);
       return;
     } else {
       nextShader = this.shaders[this.shaderIndex - 1];
       this.shaderIndex--;
     }
-    this.load(nextShader.shader, false);
-    this.engine._showViewportMessage(`Loading previous shader...`, 25);
+    this.load({ shader: nextShader.shader, addToHistory: false});
+    this.engine._showViewportMessage(`Loading previous visualizer...`, 25);
     return;
   }
 
@@ -162,14 +170,14 @@ class MAGEVisualizer {
     }
     let nextShader;
     if (this.shaderIndex >= this.shaders.length - 1) {
-      this.engine._showViewportMessage(`No more shaders.`, 25);
+      this.engine._showViewportMessage(`Reached latest visualizer.`, 25);
       return;
     } else {
       nextShader = this.shaders[this.shaderIndex + 1];
       this.shaderIndex++;
     }
-    this.load(nextShader.shader, false);
-    this.engine._showViewportMessage(`Loading next shader...`, 25);
+    this.load({ shader: nextShader.shader, addToHistory: false });
+    this.engine._showViewportMessage(`Loading next visualizer...`, 25);
     return;
   }
 }
@@ -178,7 +186,9 @@ class MAGEVisualizer {
 export class MAGEEngine {
   constructor(canvas, options = {log: false}) {
     // console log version
-    console.log(`Initializing MAGE Engine v${MAGE_VERSION}...`);
+    if (options.log) {
+      console.log(`Initializing MAGE Engine v${MAGE_VERSION}...`);
+    }
 
     // Optional HTMLCanvasElement to render into. If not provided, a canvas
     // will be created and appended to document.body, matching current behavior.
@@ -249,6 +259,10 @@ export class MAGEEngine {
       durationMs: 1000,
       fadeMs: 700,
     };
+    this._pendingSkyboxLoad = null;
+    // this._previewCaptureQueue = Promise.resolve();
+    // this.savedPresets = [];
+    // this._presetGalleryWindow = null;
 
     // Bind render loop so we can use it with requestAnimationFrame
     this._render = this._render.bind(this);
@@ -260,11 +274,14 @@ export class MAGEEngine {
     if (!this.scene) {
       this._createScene();
       this.composer = effects.applyPostProcessing(this.scene, this.renderer, this.camera);
+      this._syncSobelResolution();
     }
-    if (!this.visualizer.mesh) {
-      this._loadDefaultVisualizer();
-    }
+
     this._render();
+
+    if (!this.currentPreset && !this.visualizer.mesh) {
+      this._loadDefaultPreset();
+    }
   }
 
   play() {
@@ -284,9 +301,9 @@ export class MAGEEngine {
 
     // pause previous audio
     this.audio?.pause();
-    this.audio?.dispose();
+    // this.audio?.dispose();
     this.reversedAudio?.pause();
-    this.reversedAudio?.dispose();
+    // this.reversedAudio?.dispose();
 
     // create an Audio source
     this.audio = new Audio(this.listener);
@@ -348,14 +365,12 @@ export class MAGEEngine {
     );
   }
 
-  loadPreset(presetInput, options = {}) {
+  loadPreset(presetInput) {
     const preset = MAGEPreset.from(presetInput);
 
     if (!preset) {  
       const message = 'Invalid preset input: must be a JSON string, object literal, or MAGEPreset instance.';
-      if (options.log !== false) {
-        console.warn('[MAGEEngine.loadPreset] ' + message, { input: presetInput });
-      }
+      if (this.log) console.warn('[MAGEEngine.loadPreset] ' + message, { input: presetInput });
       return;
     }
 
@@ -370,12 +385,11 @@ export class MAGEEngine {
         const normalizedSkybox = this._normalizeSkyboxInput(preset.visualizer.skyboxPreset);
         if (normalizedSkybox) {
           this._loadSkybox(normalizedSkybox);
-        } else if (options.log !== false) {
+        } else if (this.log) 
           console.warn('[MAGEEngine.loadPreset] Invalid skyboxPreset input; expected preset id, preset path, or { type, presetId }', { input: preset.visualizer.skyboxPreset });
-        }
       }
       if (preset.visualizer.shader) {
-        this.visualizer.load(preset.visualizer.shader, insertIntoArray = true);
+        this.visualizer.load({ shader: preset.visualizer.shader, addToHistory: true, clearHistory: true });
       }
       if (typeof preset.visualizer.scale === 'number') {
         this.visualizer.scale = preset.visualizer.scale;
@@ -403,6 +417,7 @@ export class MAGEEngine {
     // }
 
     this._syncPostProcessingFromState();
+    this._syncSobelResolution();
 
     if (typeof this.refreshSettingsUI === 'function') {
       this.refreshSettingsUI();
@@ -415,7 +430,420 @@ export class MAGEEngine {
     return preset;
   }
 
+  toPreset({
+    includeState = true,
+    includeSettings = true,
+    includeThumbnail = true,
+    thumbnailWidth = 224,
+    thumbnailHeight = 224,
+    thumbnailType = 'image/png',
+    thumbnailQuality = 0.84,
+    // trackHistory = true,
+    schema = 'compact',
+  } = {}) {
+    if (this.controls && this.controls.saveState) {
+      this.controls.saveState();
+    }
+
+    const controlsState = this.controls
+      ? {
+          target0: this.controls.target0,
+          position0: this.controls.position0,
+          zoom0: this.controls.zoom0,
+        }
+      : null;
+
+    const preset = {
+      visualizer: {
+        shader: this.visualizer.shader,
+        skyboxPreset: this.visualizer.skyboxPreset,
+        scale: this.visualizer.scale,
+        render_tooltips: this.visualizer.render_tooltips,
+      },
+      controls: controlsState,
+    };
+
+    if (includeSettings) {
+      try {
+        const settings = this.exportSettingsState();
+        if (typeof this.exportSettingsState === 'function' && settings) {
+          preset.settings = settings;
+        }
+      } catch (error) {
+        console.warn('[MAGEEngine.toPreset] Failed to export settings state', error);
+      }
+    }
+
+    console.log('Generated preset from current state:', preset);
+
+    if (includeState) {
+      preset.state = { ...this.state };
+    }
+
+    if (includeThumbnail) {
+      const thumbnailDataUrl = this._captureFramePreviewDataUrlSync({
+        width: thumbnailWidth,
+        height: thumbnailHeight,
+        type: thumbnailType,
+        quality: thumbnailQuality,
+      });
+      if (thumbnailDataUrl) {
+        preset.thumbnailDataUrl = thumbnailDataUrl;
+      }
+    }
+
+    if (schema === 'compact') {
+      const compact = this._toCompactPreset({ includeState, includeThumbnail, thumbnailDataUrl: preset.thumbnailDataUrl });
+      // if (trackHistory) {
+      //   this._trackSavedPreset(compact);
+      // }
+      return compact;
+    }
+
+    preset.version = MAGE_VERSION;
+    // if (trackHistory) {
+    //   this._trackSavedPreset(preset);
+    // }
+
+    return preset;
+  }
+
+  // getSavedPresets() {
+  //   return this.savedPresets.map(entry => this._safeDeepClone(entry));
+  // }
+
+  // openSavedPresetsWindow() {
+  //   if (typeof window === 'undefined' || typeof window.open !== 'function') {
+  //     return null;
+  //   }
+
+  //   if (!this._presetGalleryWindow || this._presetGalleryWindow.closed) {
+  //     this._presetGalleryWindow = window.open('', 'mage-saved-presets', 'width=560,height=700,resizable=yes,scrollbars=yes');
+  //   }
+
+  //   this._renderSavedPresetsWindow();
+  //   return this._presetGalleryWindow;
+  // }
+
+  async captureFramePreview({
+    width = 224,
+    height = 126,
+    type = 'image/webp',
+    quality = 0.84,
+  } = {}) {
+    if (!this.renderer?.domElement) {
+      return null;
+    }
+
+    const w = Math.max(1, Number.parseInt(`${width}`, 10) || 224);
+    const h = Math.max(1, Number.parseInt(`${height}`, 10) || 126);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const context = canvas.getContext('2d', { alpha: false });
+    if (!context) {
+      return null;
+    }
+
+    context.drawImage(this.renderer.domElement, 0, 0, w, h);
+    return await new Promise(resolve => {
+      canvas.toBlob(blob => resolve(blob), type, quality);
+    });
+  }
+
+  async captureFramePreviewDataUrl(options = {}) {
+    const blob = await this.captureFramePreview(options);
+    if (!blob) {
+      return null;
+    }
+    return await this._blobToDataUrl(blob);
+  }
+
+  async captureThumbnail(
+    presetInput,
+    {
+      width = 224,
+      height = 224,
+      settleFrames = 2,
+    } = {},
+  ) {
+    return await MAGEEngine.captureThumbnail(presetInput, {
+      width,
+      height,
+      settleFrames,
+    });
+  }
+
+  static async captureThumbnail(
+    presetInput,
+    {
+      width = 224,
+      height = 224,
+      settleFrames = 2,
+    } = {},
+  ) {
+    if (typeof document === 'undefined') {
+      return null;
+    }
+
+    const w = Math.max(1, Number.parseInt(`${width}`, 10) || 224);
+    const h = Math.max(1, Number.parseInt(`${height}`, 10) || 126);
+
+    const offscreenCanvas = document.createElement('canvas');
+    offscreenCanvas.width = w;
+    offscreenCanvas.height = h;
+
+    const thumbnailEngine = new MAGEEngine(offscreenCanvas, { log: false });
+
+    try {
+      thumbnailEngine._createScene();
+      // Use a fixed pixel ratio for deterministic output across devices.
+      thumbnailEngine.renderer.setPixelRatio(1);
+      thumbnailEngine._syncViewport(true);
+
+      thumbnailEngine.composer = effects.applyPostProcessing(
+        thumbnailEngine.scene,
+        thumbnailEngine.renderer,
+        thumbnailEngine.camera,
+      );
+      thumbnailEngine._syncSobelResolution();
+
+      // Normalize interaction-driven runtime behavior for deterministic captures.
+      if (thumbnailEngine.controls) {
+        thumbnailEngine.controls.enabled = false;
+        thumbnailEngine.controls.autoRotate = false;
+      }
+
+      const loadedPreset = thumbnailEngine.loadPreset(presetInput);
+      if (!loadedPreset) {
+        return null;
+      }
+
+      // Re-apply postprocessing graph after preset load to ensure pass toggles/settings are reflected.
+      thumbnailEngine._syncPostProcessingFromState();
+
+      // Wait for async skybox texture loading so background is present in thumbnail output.
+      await thumbnailEngine._waitForPendingSkyboxLoad(2000);
+
+      //use deterministic neutral defaults instead of runtime-derived values.
+      thumbnailEngine.state.time = 0.0;
+      thumbnailEngine.state.pointerDown = 1.0;
+      thumbnailEngine.state.currPointerDown = 1.0;
+      
+      // increase size by nominal amount to prevent completely flat visualizer output for presets that derive size from audio or interactions.
+      thumbnailEngine.state.size += 0.05;
+
+      const frames = Math.max(1, Number.parseInt(`${settleFrames}`, 10) || 2);
+      for (let i = 0; i < frames; i += 1) {
+        thumbnailEngine._renderSingleFrame();
+      }
+
+      return thumbnailEngine._captureFramePreviewDataUrlSync({
+        width: w,
+        height: h,
+        type: 'image/png',
+        quality: 1,
+      });
+    } finally {
+      thumbnailEngine._disposeForThumbnailCapture();
+      offscreenCanvas.remove();
+    }
+  }
+
+  async capturePresetPreviewDataUrl(
+    presetInput,
+    {
+      settleFrames = 2,
+      width = 224,
+      height = 224,
+    } = {},
+  ) {
+    // Backward-compatible alias for deterministic preset capture.
+    return await this.captureThumbnail(presetInput, {
+      settleFrames,
+      width,
+      height,
+    });
+  }
+
+  // async buildPresetPreviewMap(
+  //   presets,
+  //   {
+  //     getId = preset => preset?.id,
+  //     onProgress = null,
+  //     settleFrames = 2,
+  //     width = 224,
+  //     height = 224,
+  //   } = {},
+  // ) {
+  //   const result = {};
+  //   if (!Array.isArray(presets) || presets.length === 0) {
+  //     return result;
+  //   }
+
+  //   for (let index = 0; index < presets.length; index += 1) {
+  //     const preset = presets[index];
+  //     const id = getId(preset, index);
+  //     if (id === undefined || id === null) {
+  //       continue;
+  //     }
+
+  //     const dataUrl = await this.captureThumbnail(preset, {
+  //       settleFrames,
+  //       width,
+  //       height,
+  //     });
+
+  //     if (dataUrl) {
+  //       result[`${id}`] = dataUrl;
+  //     }
+
+  //     if (typeof onProgress === 'function') {
+  //       onProgress({ index, total: presets.length, id, hasPreview: Boolean(dataUrl) });
+  //     }
+  //   }
+
+  //   return result;
+  // }
+
+  // Destroys the engine instance and releases resources. After calling this method, the engine should not be used.
+  dispose() {
+    if (this.renderer) {
+      this.renderer.dispose();
+      this.renderer.forceContextLoss();
+      this.renderer.context = null;
+      this.renderer.domElement = null;
+      this.renderer = null;
+    } 
+    if (this.scene) {
+      this.scene.traverse(object => {
+        if (object.geometry) {
+          object.geometry.dispose();
+        }
+        if (object.material) {
+          if (Array.isArray(object.material)) {
+            object.material.forEach(material => material.dispose());
+          } else {
+            object.material.dispose();
+          }
+        }
+      });
+      this.scene = null;
+    }
+    if (this.renderTarget) {
+      this.renderTarget.dispose();
+      this.renderTarget = null;
+    }
+    if (this.rtScene) {
+      this.rtScene.traverse(object => {
+        if (object.geometry) {
+          object.geometry.dispose();
+        }
+        if (object.material) {
+          if (Array.isArray(object.material)) {
+            object.material.forEach(material => material.dispose());
+          } else {
+            object.material.dispose();
+          }
+        }      
+      });
+      this.rtScene = null;
+    }
+    if (this.rtCamera) {
+      this.rtCamera = null;
+    }
+    if (this.camera) {
+      this.camera = null;
+    }
+    if (this.controls) {
+      this.controls.dispose();
+      this.controls = null;
+    }
+    if (this.listener) {
+      this.listener = null;
+    }
+    if (this.audio) {
+      this.audio.stop();
+      this.audio.disconnect();
+      this.audio = null;
+    }
+    if (this.reversedAudio) {
+      this.reversedAudio.stop();
+      this.reversedAudio.disconnect();
+      this.reversedAudio = null;
+    }
+    if (this.audioAnalyser) {
+      this.audioAnalyser = null;
+    }
+    if (this.visualizer) {
+      this.visualizer.mesh = null;
+      this.visualizer.shader = null;
+      this.visualizer.shaders = [];
+    }
+    this.state = null;
+    this.inputs = null;
+    this.screenShake = null;
+    this.currentPreset = null;
+    // this._previewCaptureQueue = null;
+    // this.savedPresets = [];
+    // this._presetGalleryWindow = null;
+
+    if (this.log) console.log('MAGE Engine disposed and resources released.');
+  }
+
+
   // PRIVATE METHODS
+
+  _waitFrames(frameCount = 1) {
+    const total = Math.max(1, Number.parseInt(`${frameCount}`, 10) || 1);
+    return new Promise(resolve => {
+      let remaining = total;
+      const step = () => {
+        remaining -= 1;
+        if (remaining <= 0) {
+          resolve();
+          return;
+        }
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+  }
+
+  _waitForPendingSkyboxLoad(timeoutMs = 2000) {
+    if (!this._pendingSkyboxLoad) {
+      return Promise.resolve();
+    }
+
+    const timeout = Math.max(0, Number.parseInt(`${timeoutMs}`, 10) || 0);
+    return Promise.race([
+      this._pendingSkyboxLoad.catch(() => undefined),
+      new Promise(resolve => setTimeout(resolve, timeout)),
+    ]);
+  }
+
+  _blobToDataUrl(blob) {
+    return new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  _renderSingleFrame() {
+    if (!this.renderer || !this.scene || !this.camera) {
+      return;
+    }
+    this._syncViewport();
+    this._syncSobelResolution();
+    if (this.composer) {
+      this.composer.render(this.scene, this.camera);
+    } else {
+      this.renderer.render(this.scene, this.camera);
+    }
+  }
 
   _showViewportMessage(message, durationMs = 1000) {
     this._ensureViewportToast();
@@ -433,6 +861,16 @@ export class MAGEEngine {
     this.viewportToast.el.style.display = 'block';
   }
 
+  _hideViewportMessage() {
+    this._ensureViewportToast();
+    if (!this.viewportToast.el) {
+      return;
+    }
+    this.viewportToast.visible = false;
+    this.viewportToast.el.style.opacity = '0';
+    this.viewportToast.el.style.display = 'none';
+  }
+
   _syncPostProcessingFromState() {
     if (!this.renderer || !this.scene || !this.camera) {
       return;
@@ -443,11 +881,25 @@ export class MAGEEngine {
     if (this.composer) {
       this.composer = effects.applyPostProcessing(this.scene, this.renderer, this.camera, this.composer);
     }
+
+    this._syncSobelResolution();
   }
 
-  _toCompactPreset({ includeState = false } = {}) {
+  _syncSobelResolution() {
+    if (!this.renderer || !effects.sobelShader?.shader?.uniforms?.resolution?.value) {
+      return;
+    }
+
+    const resolution = effects.sobelShader.shader.uniforms.resolution.value;
+    const bufferWidth = this.renderer.domElement?.width || Math.max(1, Math.floor(window.innerWidth * window.devicePixelRatio));
+    const bufferHeight = this.renderer.domElement?.height || Math.max(1, Math.floor(window.innerHeight * window.devicePixelRatio));
+    resolution.x = bufferWidth;
+    resolution.y = bufferHeight;
+  }
+
+  _toCompactPreset({ includeState = false, includeThumbnail = false, thumbnailDataUrl = null } = {}) {
     const compact = {
-      version: '2.0.0',
+      version: MAGE_VERSION,
       visualizer: {
         shader: this.visualizer.shader,
         skyboxPreset: this.visualizer.skyboxPreset,
@@ -473,6 +925,7 @@ export class MAGEEngine {
         fov: this.camera?.fov,
       },
       fx: {
+        passOrder: effects.getPassOrder(),
         bloom: {
           enabled: effects.bloom.enabled,
           strength: effects.bloom.settings.strength,
@@ -520,8 +973,124 @@ export class MAGEEngine {
       compact.state = { ...this.state };
     }
 
+    if (includeThumbnail && thumbnailDataUrl) {
+      compact.thumbnailDataUrl = thumbnailDataUrl;
+    }
+
     return compact;
   }
+
+  _captureFramePreviewDataUrlSync({
+    width = 224,
+    height = 126,
+    type = 'image/png',
+    quality = 0.84,
+  } = {}) {
+    if (!this.renderer?.domElement) {
+      return null;
+    }
+
+    try {
+      // Ensure a fresh frame has been drawn before reading the canvas snapshot.
+      this._renderSingleFrame();
+
+      const w = Math.max(1, Number.parseInt(`${width}`, 10) || 224);
+      const h = Math.max(1, Number.parseInt(`${height}`, 10) || 126);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const context = canvas.getContext('2d', { alpha: true });
+      if (!context) {
+        return null;
+      }
+
+      context.drawImage(this.renderer.domElement, 0, 0, w, h);
+      return canvas.toDataURL(type, quality);
+    } catch {
+      return null;
+    }
+  }
+
+  // _trackSavedPreset(preset) {
+  //   if (!preset || typeof preset !== 'object') {
+  //     return;
+  //   }
+
+  //   const cloned = this._safeDeepClone(preset);
+  //   cloned._savedAt = new Date().toISOString();
+  //   this.savedPresets.push(cloned);
+  //   this._renderSavedPresetsWindow();
+  // }
+
+  _safeDeepClone(value) {
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch {
+      return value;
+    }
+  }
+
+  _escapeHtml(text) {
+    return String(text)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+
+//   _renderSavedPresetsWindow() {
+//     if (!this._presetGalleryWindow || this._presetGalleryWindow.closed) {
+//       return;
+//     }
+
+//     const doc = this._presetGalleryWindow.document;
+//     const items = this.savedPresets
+//       .map((preset, index) => {
+//         const thumb = typeof preset.thumbnailDataUrl === 'string' ? preset.thumbnailDataUrl : '';
+//         const ts = preset._savedAt ? this._escapeHtml(new Date(preset._savedAt).toLocaleString()) : 'unknown';
+//         const pretty = this._escapeHtml(JSON.stringify(preset, null, 2));
+//         return `
+//           <article class="card">
+//             <div class="meta">
+//               <strong>Preset ${index + 1}</strong>
+//               <span>${ts}</span>
+//             </div>
+//             ${thumb ? `<img class="thumb" src="${thumb}" alt="Preset ${index + 1} thumbnail" />` : '<div class="thumb empty">No thumbnail</div>'}
+//             <details>
+//               <summary>JSON</summary>
+//               <pre>${pretty}</pre>
+//             </details>
+//           </article>
+//         `;
+//       })
+//       .join('');
+
+//     doc.open();
+//     doc.write(`<!doctype html>
+// <html>
+//   <head>
+//     <meta charset="utf-8" />
+//     <title>MAGE Saved Presets</title>
+//     <style>
+//       body { margin: 0; padding: 12px; background: #0f1117; color: #e8ebf2; font-family: Arial, sans-serif; }
+//       h1 { margin: 0 0 10px; font-size: 16px; }
+//       .list { display: grid; gap: 10px; }
+//       .card { border: 1px solid #2f3440; border-radius: 10px; background: #171b24; padding: 10px; }
+//       .meta { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; margin-bottom: 8px; }
+//       .thumb { width: 100%; max-height: 180px; object-fit: contain; border-radius: 8px; border: 1px solid #394153; background: #0b0e14; }
+//       .thumb.empty { display: grid; place-items: center; color: #8f98ad; min-height: 120px; }
+//       details { margin-top: 8px; }
+//       pre { white-space: pre-wrap; word-break: break-word; font-size: 11px; color: #c8cfde; background: #10141c; border-radius: 8px; padding: 8px; }
+//     </style>
+//   </head>
+//   <body>
+//     <h1>Saved toPreset Snapshots (${this.savedPresets.length})</h1>
+//     <div class="list">${items || '<div class="card">No presets saved yet.</div>'}</div>
+//   </body>
+// </html>`);
+//     doc.close();
+//   }
 
   _applyCompactIntent(intent) {
     if (!intent || typeof intent !== 'object') {
@@ -556,6 +1125,10 @@ export class MAGEEngine {
   _applyCompactFx(fx) {
     if (!fx || typeof fx !== 'object') {
       return;
+    }
+
+    if (Array.isArray(fx.passOrder)) {
+      effects.setPassOrder(fx.passOrder);
     }
 
     if (fx.bloom && typeof fx.bloom === 'object') {
@@ -834,8 +1407,18 @@ export class MAGEEngine {
   _getViewportSize() {
     if (this.canvas) {
       const rect = this.canvas.getBoundingClientRect();
-      const width = Math.max(1, Math.floor(rect.width || this.canvas.clientWidth || 0));
-      const height = Math.max(1, Math.floor(rect.height || this.canvas.clientHeight || 0));
+      const width = Math.max(
+        1,
+        Math.floor(
+          rect.width || this.canvas.clientWidth || this.canvas.width || 0,
+        ),
+      );
+      const height = Math.max(
+        1,
+        Math.floor(
+          rect.height || this.canvas.clientHeight || this.canvas.height || 0,
+        ),
+      );
       if (width > 0 && height > 0) {
         return { width, height };
       }
@@ -875,10 +1458,17 @@ export class MAGEEngine {
         Math.max(1, Math.floor(height / 4)),
       );
     }
+
+    this._syncSobelResolution();
   }
 
   _ensureViewportToast() {
     if (this.viewportToast.el && document.body.contains(this.viewportToast.el)) {
+      return;
+    }
+
+    // Skip toast creation for detached/offscreen canvases used for thumbnail capture.
+    if (this.canvas && !this.canvas.isConnected) {
       return;
     }
 
@@ -920,6 +1510,34 @@ export class MAGEEngine {
     this.viewportToast.el = toast;
   }
 
+  _disposeForThumbnailCapture() {
+    this._pendingSkyboxLoad = null;
+
+    try {
+      this.controls?.dispose?.();
+    } catch {
+      // no-op
+    }
+
+    try {
+      this.renderTarget?.dispose?.();
+    } catch {
+      // no-op
+    }
+
+    try {
+      this.renderer?.dispose?.();
+      this.renderer?.forceContextLoss?.();
+    } catch {
+      // no-op
+    }
+
+    if (this.viewportToast?.el?.parentElement) {
+      this.viewportToast.el.parentElement.removeChild(this.viewportToast.el);
+    }
+    this.viewportToast.el = null;
+  }
+
   _createScene() {
     const { width, height } = this._getViewportSize();
 
@@ -954,7 +1572,7 @@ export class MAGEEngine {
     }
 
     // initialize clock
-    this.clock = new Clock();
+    this.clock = new Timer();
 
     // Add mouse controls
     this.controls = new OrbitControls(this.camera, this.renderer.domElement, {
@@ -985,8 +1603,21 @@ export class MAGEEngine {
 
   _loadDefaultVisualizer() {
     // SHADER
-    this.visualizer.load(generateshaderparkcode('default'), true);
-    this._loadSkybox({ type: 'preset', presetId: 0 });
+    this.visualizer.load({ shader: generateshaderparkcode('default'), addToHistory: false });
+    this._loadSkybox({ type: 'preset', presetId: 6 });
+  }
+
+  _loadDefaultPreset() {
+    // const defaultPreset = getEmbeddedPresetById(1);
+    // if (defaultPreset) {
+    //   const loadedPreset = this.loadPreset(defaultPreset);
+    //   if (loadedPreset) {
+    //     return loadedPreset;
+    //   }
+    // }
+
+    this._loadDefaultVisualizer();
+    return null;
   }
 
   _idFromShaderCode(shaderCode) {
@@ -1010,16 +1641,46 @@ export class MAGEEngine {
     this.visualizer.skyboxPreset = skyboxId;
 
     const loader = new CubeTextureLoader();
-    loader.setPath(resolvedPath);
-    const texture = loader.load([
-      'sky_left.jpg',
-      'sky_right.jpg',
-      'sky_up.jpg',
-      'sky_down.jpg',
-      'sky_front.jpg',
-      'sky_back.jpg',
-    ]);
-    this.scene.background = texture;
+    const embeddedFaces = getEmbeddedSkyboxFaces(skyboxId);
+
+    const faceUrls = embeddedFaces
+      ? [
+          embeddedFaces.left,
+          embeddedFaces.right,
+          embeddedFaces.up,
+          embeddedFaces.down,
+          embeddedFaces.front,
+          embeddedFaces.back,
+        ]
+      : [
+          `${resolvedPath}sky_left.jpg`,
+          `${resolvedPath}sky_right.jpg`,
+          `${resolvedPath}sky_up.jpg`,
+          `${resolvedPath}sky_down.jpg`,
+          `${resolvedPath}sky_front.jpg`,
+          `${resolvedPath}sky_back.jpg`,
+        ];
+
+    this._pendingSkyboxLoad = new Promise(resolve => {
+      let settled = false;
+      const finish = result => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        this._pendingSkyboxLoad = null;
+        resolve(result);
+      };
+
+      const texture = loader.load(
+        faceUrls,
+        () => finish(true),
+        undefined,
+        () => finish(false),
+      );
+
+      this.scene.background = texture;
+    });
   }
 
   _createMeshes() {
@@ -1162,7 +1823,8 @@ export class MAGEEngine {
           this.renderer.readRenderTargetPixels(this.renderTarget, x, y, 1, 1, pixelBuffer);
 
           // Check if pixel belongs to shader (e.g., non-zero alpha)
-          if (pixelBuffer[3] > 0) {
+          const nearCenter = this._isPointerNearVisualizerCenter(this.visualizer.centerClickRadiusNdc);
+          if (pixelBuffer[3] > 0 && nearCenter) {
             this._growVisualizer();
             this.visualizer.clickable = true;
           } else {
@@ -1203,6 +1865,22 @@ export class MAGEEngine {
 
   _growVisualizer() {
     this.state.size += 0.03 * (1 - this.state.easing_speed + 0.01);
+  }
+
+  _isPointerNearVisualizerCenter(maxDistanceNdc = 0.35) {
+    if (!this.visualizer?.mesh || !this.camera || !this.inputs?.currMouse) {
+      return false;
+    }
+
+    const meshCenterNdc = this.visualizer.mesh.position.clone().project(this.camera);
+    if (!Number.isFinite(meshCenterNdc.x) || !Number.isFinite(meshCenterNdc.y)) {
+      return false;
+    }
+
+    const dx = this.inputs.currMouse.x - meshCenterNdc.x;
+    const dy = this.inputs.currMouse.y - meshCenterNdc.y;
+    const distance = Math.hypot(dx, dy);
+    return distance <= Math.max(0.01, Number(maxDistanceNdc) || 0.35);
   }
 
   _getOS() {

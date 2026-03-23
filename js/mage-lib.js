@@ -29,23 +29,29 @@ engine.toPreset() -> returns the current preset as a MAGEPreset instance
 // Import core components and utilities
 import { MAGEEngine, MAGEPreset } from './MAGEEngine.js';
 import { initControls } from './controls.js';
+import { getEmbeddedPresetById } from './presets.js';
 
 export { MAGEEngine, MAGEPreset, initControls };
+
+export function applyEmbeddedPreset(engine, presetId) {
+  if (!engine || typeof engine.loadPreset !== 'function') {
+    return false;
+  }
+  const preset = getEmbeddedPresetById(presetId);
+  if (!preset) {
+    return false;
+  }
+  return Boolean(engine.loadPreset(preset));
+}
 
 export function initMAGE({
   canvas,
   withControls = true,
   autoStart = false,
-  assetBaseUrl = '../resources',
   options = { log: true },
 } = {}) {
   // Initialize the MAGE Engine with the provided canvas and configuration options.
   const engine = new MAGEEngine(canvas, options);
-
-  // Public config used by controls/preset helpers to resolve static assets. 
-  // (only needs to be changed if you are hosting your own copy of the MAGE 
-  // Engine and want to serve assets from a different location)
-  engine.assetBaseUrl = assetBaseUrl;
 
   // Controls require initialized renderer/camera/controls
   if (autoStart || withControls) {
@@ -54,10 +60,9 @@ export function initMAGE({
 
   // Initialize controls if requested
   const controls = withControls
-    ? initControls(engine, { assetBaseUrl })
+    ? initControls(engine)
     : null;
   
   // Return the initialized engine and controls (if created) for external use.
   return { engine, controls };
 }
-

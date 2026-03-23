@@ -82,13 +82,43 @@ textarea {
   max-height: 220px;
 }
 
+#savedPresetGallery {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+  margin-top: 8px;
+}
+
+.savedPresetCard {
+  border: 1px solid #333b4f;
+  border-radius: 8px;
+  background: #10131b;
+  padding: 8px;
+}
+
+.savedPresetCard img {
+  width: 100%;
+  max-height: 120px;
+  object-fit: contain;
+  border-radius: 6px;
+  border: 1px solid #3b4257;
+  background: #080b10;
+  margin-top: 6px;
+}
+
+.savedPresetMeta {
+  font-size: 11px;
+  opacity: 0.9;
+}
+
 #mageWrap {
   display: grid;
   place-items: center;
 }
 
 #mage {
-  width: min(800px, 92vw);
+  width: min(500px, 92vw);
   aspect-ratio: 1 / 1;
   background: #000;
   border-radius: 12px;
@@ -143,6 +173,11 @@ textarea {
       </div>
 
       <div class="group">
+        <strong>Saved toPresets (session)</strong>
+        <div id="savedPresetGallery"></div>
+      </div>
+
+      <div class="group">
         <strong>Quick Preset Builder</strong>
         <input id="presetId" type="number" min="0" value="0" placeholder="Preset ID" />
         <textarea id="shaderCode" placeholder="Optional shader code (leave blank for current/default)"></textarea>
@@ -174,6 +209,28 @@ textarea {
         logEl.value = `${line}\n${logEl.value}`;
         };
 
+        const savedPresetGallery = document.getElementById('savedPresetGallery');
+        const renderSavedPresetGallery = () => {
+          const presets = typeof engine.getSavedPresets === 'function' ? engine.getSavedPresets() : [];
+          if (!Array.isArray(presets) || presets.length === 0) {
+            savedPresetGallery.innerHTML = '<div class="savedPresetCard"><div class="savedPresetMeta">No presets created yet.</div></div>';
+            return;
+          }
+
+          savedPresetGallery.innerHTML = presets
+            .map((preset, index) => {
+              const when = preset._savedAt ? new Date(preset._savedAt).toLocaleTimeString() : 'unknown';
+              const thumb = typeof preset.thumbnailDataUrl === 'string' ? `<img src="${preset.thumbnailDataUrl}" alt="Preset ${index + 1} thumbnail" />` : '';
+              return `
+                <article class="savedPresetCard">
+                  <div class="savedPresetMeta">Preset ${index + 1} • ${when}</div>
+                  ${thumb}
+                </article>
+              `;
+            })
+            .join('');
+        };
+
         const container = document.getElementById('mage');
         const canvas = document.createElement('canvas');
         container.appendChild(canvas);
@@ -182,7 +239,6 @@ textarea {
             canvas,
             withControls: true,
             autoStart: true,
-            assetBaseUrl: './resources/',
         });
 
         document.getElementById('btnStart').addEventListener('click', () => {
@@ -227,10 +283,11 @@ textarea {
         });
 
         document.getElementById('btnExportPreset').addEventListener('click', () => {
-        const preset = engine.toPreset({ includeState: true });
+        const preset = engine.toPreset({ includeState: true, includeThumbnail: true });
         const json = JSON.stringify(preset, null, 2);
         document.getElementById('presetInput').value = json;
-        log('toPreset({ includeState: true }) called');
+        renderSavedPresetGallery();
+        log('toPreset({ includeState: true, includeThumbnail: true }) called');
         });
 
         document.getElementById('btnApplyQuickPreset').addEventListener('click', () => {
@@ -251,6 +308,7 @@ textarea {
             log(`Quick preset applied (presetId=${presetId})`);
         });
 
+        renderSavedPresetGallery();
         log('Engine initialized. API test harness ready.');
     });
   </script>

@@ -31,6 +31,24 @@
     "fov": 75
   },
   "fx": {
+    "passOrder": [
+      "glitchPass",
+      "bloom",
+      "RGBShift",
+      "dotShader",
+      "technicolorShader",
+      "luminosityShader",
+      "afterImagePass",
+      "sobelShader",
+      "colorifyShader",
+      "halftonePass",
+      "gammaCorrectionShader",
+      "kaleidoShader",
+      "copyShader",
+      "bleachBypassShader",
+      "toonShader",
+      "outputPass"
+    ],
     "bloom": {
       "enabled": false,
       "strength": 1,

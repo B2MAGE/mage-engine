@@ -34,6 +34,35 @@ MAGE is primarily made in Javascript and leverages the following libraries:
 
 Vanilla HTML, CSS, and JavaScript are used for the frontend.
 
+## Embedded Presets And Skyboxes
+Preset JSON and skybox textures are embedded in JavaScript automatically during `vite build`.
+
+Preset embedding source order per `resources/presetX/`:
+- `preset.v2.json` (preferred)
+- `preset.json` (fallback)
+
+To manually regenerate embedded assets:
+
+```bash
+npm run generate:embedded-presets
+npm run generate:embedded-skyboxes
+```
+
+These scripts update:
+- `js/presets.js`
+- `js/embedded-skyboxes.js`
+
+How to add more skyboxes later:
+- Add a new folder like `resources/preset11/`.
+- Add `preset.v2.json` (or `preset.json`) in that folder.
+- Include all six faces (`sky_left`, `sky_right`, `sky_up`, `sky_down`, `sky_front`, `sky_back`) with supported extensions.
+- Run `npx vite build` and the embed file is regenerated automatically before bundling.
+
+Runtime loading behavior:
+- Presets: in dev mode (`vite`), controls try real resource JSON first, then embedded fallback.
+- Presets: in build/prod, controls use embedded presets first, then resource-path fallback.
+- Skyboxes: `MAGEEngine` uses embedded skybox data first, then falls back to file-path loading from `resources/presetX/`.
+
 ## Contributing
 Contributions are welcome! Feel free to add changes, suggest new features, or improve existing ones. MAGE is fully open-source, and your creativity is encouraged. Also if the generator spits out a really cool visualizer feel free to send it to me and I can make it a preset!
 

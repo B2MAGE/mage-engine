@@ -4,7 +4,9 @@
   "description": "[MAGE](https://bsiscoe.github.io/MAGE) is a AI powered music visualizer that utilizes heavy randomization of Shaderpark shaders to create unique, audio-reactive environments. Perfect for musicians looking to produce captivating music videos, artists trying to create mesmerizing visual effects, or developers exploring generative AI and audio reactive environments.\r [![Video Title](https://img.youtube.com/vi/5CxVeUv1_FY/0.jpg)](https://www.youtube.com/watch?v=5CxVeUv1_FY)",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "generate:embedded-presets": "node scripts/generate_embedded_presets.cjs",
+    "generate:embedded-skyboxes": "node scripts/generate_embedded_skyboxes.cjs"
   },
   "repository": {
     "type": "git",
