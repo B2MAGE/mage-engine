@@ -7,12 +7,12 @@ initialization and access to core components like the engine and controls.
 import { initMAGE } from './mage-engine.mjs';
 
 Create a MAGE object with the desired configuration options. For example:
-const { engine, controls } = initMAGE({
-  canvas: document.getElementById('myCanvas'), // Optional: specify a canvas element
-  withControls: true, // Optional: include controls (default: true)
-  autoStart: true, // Optional: automatically start the engine (default: false)
-  assetBaseUrl: '../resources', // Optional: base URL for assets (default: '../resources')
-});
+const {engine, controls} = initMAGE({
+  canvas,
+  withControls = true,
+  autoStart = false,
+  options = { log: true },
+})
 ```
 
 The returned object includes the initialized engine and controls (if created) for further use in your application.
