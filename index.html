@@ -1,67 +1,259 @@
 <!DOCTYPE html>
-<html lang="en">
-  
-  <head>
-    <title>MAGE</title>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="icon" type="image/png" href="resources/favicon-96x96.png" sizes="96x96" />
-    <link rel="icon" type="image/svg+xml" href="resources/favicon.svg" />
-    <link rel="shortcut icon" href="resources/favicon.ico" />
-    <link rel="apple-touch-icon" sizes="180x180" href="resources/apple-touch-icon.png" />
-    <meta name="apple-mobile-web-app-title" content="MAGE" />
-    <link rel="manifest" href="resources/site.webmanifest" />
-    <!-- import the webpage's stylesheet -->
-    <link rel="stylesheet" href="style.css">
-  </head>  
-  <body>
-    <div class="ui_buttons centerx" display="style: none">
-      <abbr title-card="REGENERATE VISUALIZER">
-        <div class="ui ui_button_small" id="ui_regenerate"><img src="./resources/regenerate_ui.png"></div>
-      </abbr>
-      <abbr title-card="SAVE SCENE AS PRESET">
-        <div class="ui ui_button_small" id="ui_save"><img src="./resources/save_ui.png"></div>
-      </abbr>
-      <abbr title-card="DELETE SCENE FROM PRESETS">
-        <div class="ui ui_button_small" id="ui_delete"><img src="./resources/delete_ui.png"></div>
-      </abbr>
-      <abbr title-card="UPLOAD MUSIC TO VISUALIZER">
-        <div class="ui ui_button_small" id="ui_upload"><img src="./resources/upload_ui.png"></div>
-      </abbr>
-      <abbr title-card="HIDE ALL UI (INCLUDES MOUSE TIPS)">
-        <div class="ui ui_button_small" id="ui_hide"><img src="./resources/hide_ui.png"></div>
-      </abbr>
-      <abbr title-card="MORE SETTINGS">
-        <div class="ui ui_button_small" id="ui_settings"><img src="./resources/settings_ui.png"></div>
-      </abbr>
-      <abbr title-card="COPY SCENE DATA">
-        <div class="ui ui_button_small" id="ui_copy"><img src="./resources/copy_ui.png"></div>
-      </abbr>
-      <abbr title-card="LOAD SCENE DATA">
-        <div class="ui ui_button_small" id="ui_load"><img src="./resources/load_ui.png"></div>
-      </abbr>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>MAGE API Test Harness</title>
+<style>
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #0f0f0f;
+  color: #e9e9e9;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) 1fr;
+  gap: 16px;
+  padding: 16px;
+}
+
+.panel {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.panel h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+.group {
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #2b2b2b;
+}
+
+.group:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+input, textarea, button {
+  background: #0f0f0f;
+  color: #e9e9e9;
+  border: 1px solid #3b3b3b;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 13px;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: #606060;
+}
+
+input, textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+textarea {
+  min-height: 120px;
+  resize: vertical;
+  font-family: Consolas, Monaco, monospace;
+}
+
+#log {
+  min-height: 120px;
+  max-height: 220px;
+}
+
+#mageWrap {
+  display: grid;
+  place-items: center;
+}
+
+#mage {
+  width: min(800px, 92vw);
+  aspect-ratio: 1 / 1;
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+#mage canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+@media (max-width: 800px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+</head>
+
+<body>
+  <div class="layout">
+    <div class="panel">
+      <h2>MAGE Engine API Test</h2>
+
+      <div class="group">
+        <strong>Playback</strong>
+        <div class="row">
+          <button id="btnStart">start()</button>
+          <button id="btnPlay">play()</button>
+          <button id="btnPause">pause()</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <strong>Audio</strong>
+        <input id="audioUrl" placeholder="Audio URL (optional)" />
+        <div class="row">
+          <button id="btnLoadAudioUrl">loadAudio(url)</button>
+          <button id="btnLoadAudioFile">loadAudio() file picker</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <strong>Preset</strong>
+        <textarea id="presetInput" placeholder='Paste preset JSON for loadPreset(...)'></textarea>
+        <div class="row">
+          <button id="btnLoadPreset">loadPreset(json)</button>
+          <button id="btnExportPreset">toPreset()</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <strong>Quick Preset Builder</strong>
+        <input id="presetId" type="number" min="0" value="0" placeholder="Preset ID" />
+        <textarea id="shaderCode" placeholder="Optional shader code (leave blank for current/default)"></textarea>
+        <div class="row">
+          <button id="btnApplyQuickPreset">Apply preset skybox</button>
+          <button id="btnFillSample">Fill sample JSON</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <strong>Logs</strong>
+        <textarea id="log" readonly></textarea>
+      </div>
+    </div>
+
+    <div id="mageWrap">
+      <div id="mage"></div>
+    </div>
   </div>
-  <div class="ui_bgs centery EDITMODE" style="top: 265px;"> 
-    <!-- insert song presets with javascript here -->
-  </div>
-    <script src="https://mrdoob.github.io/stats.js/build/stats.min.js"></script>
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
-      <input type="file" id="file" style="display: none;"/>
-      <audio id="audio" style="display: none;" controls>
-        <source src="" id="src" />
-      </audio>
-    <script src="https://mrdoob.github.io/stats.js/build/stats.min.js"></script>
-    <script async src="https://unpkg.com/tweakpane-plugin-audio-player@0.0.2/dist/tweakpane-plugin-audio-player.js"></script>
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@latest/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@latest/examples/jsm/"
-              }
+
+  <input type="file" id="file" style="display:none;" />
+
+  <script type="module">
+    import { initMAGE } from "./mage-engine.mjs";
+    window.addEventListener('load', () => {
+      
+        const logEl = document.getElementById('log');
+        const log = message => {
+        const line = `[${new Date().toLocaleTimeString()}] ${message}`;
+        logEl.value = `${line}\n${logEl.value}`;
+        };
+
+        const container = document.getElementById('mage');
+        const canvas = document.createElement('canvas');
+        container.appendChild(canvas);
+
+        const { engine } = initMAGE({
+            canvas,
+            withControls: true,
+            autoStart: true,
+            assetBaseUrl: './resources/',
+        });
+
+        document.getElementById('btnStart').addEventListener('click', () => {
+        engine.start();
+        log('start() called');
+        });
+
+        document.getElementById('btnPlay').addEventListener('click', () => {
+        engine.play();
+        log('play() called');
+        });
+
+        document.getElementById('btnPause').addEventListener('click', () => {
+        engine.pause();
+        log('pause() called');
+        });
+
+        document.getElementById('btnLoadAudioUrl').addEventListener('click', () => {
+        const url = document.getElementById('audioUrl').value.trim();
+        engine.loadAudio(url || undefined);
+        log(url ? `loadAudio(url): ${url}` : 'loadAudio() with no URL');
+        });
+
+        document.getElementById('btnLoadAudioFile').addEventListener('click', () => {
+        engine.loadAudio();
+        log('loadAudio() file picker opened');
+        });
+
+        document.getElementById('btnLoadPreset').addEventListener('click', () => {
+        const text = document.getElementById('presetInput').value.trim();
+        if (!text) {
+            log('No preset JSON provided');
+            return;
         }
-    </script>
-    <script src="./js/index.js" type="module"></script>
-    <script src="./js/generateshaderparkcode.js" type="module"></script>
-  </body>
+
+        try {
+            engine.loadPreset(text);
+            log('loadPreset(json) called');
+        } catch (error) {
+            log(`loadPreset failed: ${error.message}`);
+        }
+        });
+
+        document.getElementById('btnExportPreset').addEventListener('click', () => {
+        const preset = engine.toPreset({ includeState: true });
+        const json = JSON.stringify(preset, null, 2);
+        document.getElementById('presetInput').value = json;
+        log('toPreset({ includeState: true }) called');
+        });
+
+        document.getElementById('btnApplyQuickPreset').addEventListener('click', () => {
+            const presetId = Number.parseInt(document.getElementById('presetId').value, 10) || 0;
+            const shaderText = document.getElementById('shaderCode').value.trim();
+
+            const payload = {
+                visualizer: {
+                skybox: { type: 'preset', presetId },
+                },
+            };
+
+            if (shaderText) {
+                payload.visualizer.shader = shaderText;
+            }
+
+            engine.loadPreset(payload);
+            log(`Quick preset applied (presetId=${presetId})`);
+        });
+
+        log('Engine initialized. API test harness ready.');
+    });
+  </script>
+</body>
 </html>
