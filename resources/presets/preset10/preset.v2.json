@@ -1,0 +1,118 @@
+{
+  "version": "1.1.0",
+  "visualizer": {
+    "shader": "\n        setMaxIterations(151);\n        setStepSize(0.26597607104610804);\n        \n        let size = input();\n        let pointerDown = input();\n        time *= .1;\n        rotateY(mouse.x * -5 * PI / 2 + time - (pointerDown + 0.1));\n        rotateX(mouse.y * 5 * PI / 2 + time);\n    \n        // Set color\n        color(0.19651749597261697, 0.914203219207783, 0.24550611194053884);\n    \n        // Add rotations\n        rotateX(getRayDirection().y * 1.9938824658616179 + time);\n        rotateY(getRayDirection().x * 1.9938824658616179 + time);\n        rotateZ(getRayDirection().z * 1.9938824658616179 + time);\n    \n        // Apply metal and shine\n        metal(0.31594207653292694 * size);\n        shine(0.3832572948846391);\n    \n        // Render the shapes\n        torus(size * 0.8810248079142805 - pointerDown * 0.05, size * 0.8810248079142805 - pointerDown * 0.05 / 4);\nboxFrame(vec3(size * 0.8855044665503 - pointerDown * 0.05), size * 0.8855044665503 - pointerDown * 0.05 * 0.1);\n    \n        // Apply blending\n        blend(nsin(time * size) * 0.11214341939632295);\n    \n        // Extra shape\n        grid(1, size * 4, max(0.001, size * 0.003));\n      ",
+    "skyboxPreset": 5,
+    "scale": 200
+  },
+  "controls": {
+    "target0": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "position0": {
+      "x": -0.00004459732786114684,
+      "y": -45.05000802219578,
+      "z": 0.000007023116108756063
+    },
+    "zoom0": 1
+  },
+  "intent": {
+    "time_multiplier": 1,
+    "minimizing_factor": 0.5,
+    "power_factor": 4.46,
+    "pointerDownMultiplier": 0,
+    "base_speed": 0.17445652173913043,
+    "easing_speed": 0.6,
+    "camTilt": 0,
+    "autoRotate": true,
+    "autoRotateSpeed": 1.38,
+    "fov": 75
+  },
+  "fx": {
+    "passOrder": [
+      "afterImagePass",
+      "gammaCorrectionShader",
+      "luminosityShader",
+      "toonShader",
+      "dotShader",
+      "copyShader",
+      "sobelShader",
+      "glitchPass",
+      "technicolorShader",
+      "colorifyShader",
+      "RGBShift",
+      "halftonePass",
+      "bloom",
+      "kaleidoShader",
+      "bleachBypassShader",
+      "outputPass"
+    ],
+    "bloom": {
+      "enabled": true,
+      "strength": 0.09,
+      "radius": -3.85,
+      "threshold": 0.68
+    },
+    "toneMapping": {
+      "method": 7,
+      "exposure": 4.3
+    },
+    "passes": {
+      "rgbShift": true,
+      "dot": false,
+      "technicolor": false,
+      "luminosity": false,
+      "afterImage": true,
+      "sobel": false,
+      "glitch": false,
+      "colorify": true,
+      "halftone": false,
+      "gammaCorrection": true,
+      "kaleid": true,
+      "outputPass": true
+    },
+    "params": {
+      "rgbShift": {
+        "amount": 0.0155,
+        "angle": 0
+      },
+      "afterImage": {
+        "damp": 0.94
+      },
+      "colorify": {
+        "color": 16646021
+      },
+      "kaleid": {
+        "sides": 3,
+        "angle": 1.5
+      }
+    }
+  },
+  "state": {
+    "time_multiplier": 1,
+    "mouse": {
+      "x": -0.999499999999999,
+      "y": 0.894499999999999,
+      "z": 0
+    },
+    "currMouse": {
+      "x": -0.9995,
+      "y": 0.8945,
+      "z": 0
+    },
+    "size": 0.017387793394207963,
+    "pointerDown": 2.5e-323,
+    "pointerDownMultiplier": 0,
+    "currPointerDown": 0,
+    "currAudio": 0.01738779339420796,
+    "time": 136.96480000001546,
+    "volume_multiplier": 0,
+    "minimizing_factor": 0.5,
+    "power_factor": 4.46,
+    "base_speed": 0.17445652173913043,
+    "easing_speed": 0.6,
+    "camTilt": 0
+  }
+}

@@ -1,0 +1,15 @@
+node_modules/
+.DS_Store
+*.log
+js/
+resources/
+scripts/
+index_old.html
+index.html
+jsconfig.json
+package-lock.json
+tsconfig.json
+schema.js
+style.css
+vite.config.js
+.gitattributes
