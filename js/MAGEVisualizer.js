@@ -1,23 +1,38 @@
-import { shaderParkGenerator } from "./generateshaderparkcode";
+import { shaderParkGenerator } from "./generateshaderparkcode.js";
 import { hashSeedString } from "./helpers.js";
 import { BoxGeometry } from 'three';
-import { createSculptureWithGeometry } from "shader-park-core";
-
+import { createSculptureWithGeometry } from "./sculpture.js";
+import { normalizeCompiledShader } from './compiled-shader.js';
 export class MAGEVisualizer {
+  loadCompiled(shaderCode, compiledArtifact) {
+    if (typeof shaderCode !== "string") throw new Error("Compiled presets require inert shader source metadata.");
+    const artifact = normalizeCompiledShader(compiledArtifact, {
+      maxRaymarchIterations: this.engine.getRenderBudget().maxRaymarchIterations
+    });
+    this.createMesh("", artifact);
+    this.compiledArtifact = artifact;
+    this.shaders = [{
+      shader: shaderCode,
+      compiledArtifact: artifact,
+      timestamp: Date.now()
+    }];
+    this.shaderIndex = 0;
+    return shaderCode;
+  }
   constructor(engine) {
     this.engine = engine;
-    this.shader = null;
-    this.seed = null;
+    this.seed = 0;
     this.shaderIndex = -1;
     this.shaders = [];
     this.skyboxPreset = null;
     this.mesh = null;
-    this.scale = 10.0;
+    this.compiledArtifact = null;
+    this.scale = 10;
     this.intersected = false;
     this.clickable = false;
     this.controllingAudio = false;
     this.render_tooltips = true;
-    this.centerClickRadiusNdc = 0.35;
+    this.centerClickRadiusNdc = .35;
   }
 
   /**
@@ -35,8 +50,13 @@ export class MAGEVisualizer {
    * if loading failed due to invalid input.
    */
 
-  load({ seed = null, shader = null, addToHistory = true, clearHistory = false, generator = null } = {}){
-
+  load({
+    seed = null,
+    shader = null,
+    addToHistory = true,
+    clearHistory = false,
+    generator = null
+  } = {}) {
     let finalShaderCode = null;
     let generatedSeed = null;
 
@@ -55,92 +75,58 @@ export class MAGEVisualizer {
       if (seed !== null) {
         generatedSeed = seed;
       }
-    // If no shader provided but seed is provided, we can still generate a shader
+      // If no shader provided but seed is provided, we can still generate a shader
     } else {
       const result = shaderParkGenerator(this, seed, generator);
       finalShaderCode = result.shader;
       generatedSeed = result.seed;
     }
-
     this.shader = finalShaderCode;
     this.seed = generatedSeed;
-
     if (!finalShaderCode) {
       throw new Error('Failed to load shader: No valid shader code provided and generation failed.');
     }
-
     if (clearHistory) {
       this.shaders = [];
       this.shaderIndex = -1;
     }
-
     if (addToHistory) {
       this.shaders.push({
         //id: MAGEEngine.#_idFromShaderCode(finalShaderCode),
         shader: this.shader,
         seed: this.seed,
-        timestamp: Date.now(),
+        timestamp: Date.now()
       });
       this.shaderIndex = this.shaders.length - 1;
     }
-
     this.createMesh(this.shader);
   }
-
-  createMesh(shaderCode) {
-    const state = this.engine.state;
-    const geometry = new BoxGeometry(20000, 20000, 20000);
-    
-    // Only pass audio params if the shader declares them
-    const hasAudioInputs = shaderCode &&
-      shaderCode.includes('let bass = input()') &&
-      shaderCode.includes('let mid = input()') &&
-      shaderCode.includes('let treble = input()') &&
-      shaderCode.includes('let energy = input()') &&
-      shaderCode.includes('let spectralCentroid = input()') &&
-      shaderCode.includes('let energyTrend = input()');
-
-    const hasLegacyAudioInputs = shaderCode &&
-      shaderCode.includes('let size = input()')
-    
-    this.mesh = createSculptureWithGeometry(geometry, shaderCode, () => {
-          const callback = {
-            time: state.time ?? 0,
-            pointerDown: state.pointerDown ?? 0,
-            mouse: state.mouse ?? { x: 0, y: 0 },
-            _scale: this.scale ?? 1,
-          };
-          
-          // Only add audio params if shader declares them (allows legacy shaders to work)
-          if (hasAudioInputs) {
-            callback.bass = state.currBass ?? 0;
-            callback.mid = state.currMid ?? 0;
-            callback.treble = state.currTreble ?? 0;
-            callback.energy = state.currEnergy ?? 0;
-            callback.spectralCentroid = state.currCentroid ?? 0;
-            callback.energyTrend = state.currEnergyTrend ?? 0;
-          }
-
-          if (hasLegacyAudioInputs) {
-            // scale curr energy to a 0-1 range and add to existing size input for legacy shader support, allowing older shaders to be influenced by audio without breaking their existing size mappings
-            callback.size = state.currEnergy * 0.23 + state.size ?? 0;
-          }
-          
-          return callback;
-    });
+  createMesh(shaderCode, compiledArtifact) {
+    const {
+      state
+    } = this.engine.getEngineFields();
+    this.compiledArtifact = compiledArtifact ?? null;
+    this.mesh = (0, createSculptureWithGeometry)(new BoxGeometry(2e4, 2e4, 2e4), shaderCode, () => {
+      return {
+        ...this.engine.getAudioResponseOutputs(),
+        time: state.time,
+        size: state.size,
+        pointerDown: state.pointerDown,
+        mouse: state.mouse,
+        _scale: this.scale
+      };
+    }, {
+      maxRaymarchIterations: this.engine.getRenderBudget().maxRaymarchIterations
+    }, compiledArtifact);
   }
-
   getActiveShader() {
     if (this.shaderIndex >= 0 && this.shaderIndex < this.shaders.length) {
       return this.shaders[this.shaderIndex].shader;
     }
     return 'default';
   }
-
   previousShader() {
-    if (this.shaders.length <= 1) {
-      return;
-    }
+    if (this.shaders.length <= 1) return;
     let nextShader;
     if (this.shaderIndex <= 0) {
       this.engine.showViewportMessage(`Reached first visualizer.`, 25);
@@ -149,15 +135,14 @@ export class MAGEVisualizer {
       nextShader = this.shaders[this.shaderIndex - 1];
       this.shaderIndex--;
     }
-    this.load({ shader: nextShader.shader, seed: nextShader.seed, addToHistory: false });
+    if (nextShader.compiledArtifact) this.loadCompiled(nextShader.shader, nextShader.compiledArtifact);else this.load({
+      shader: nextShader.shader,
+      addToHistory: false
+    });
     this.engine.showViewportMessage(`Loading previous visualizer...`, 25);
-    return;
   }
-
   nextShader() {
-    if (this.shaders.length <= 1) {
-      return;
-    }
+    if (this.shaders.length <= 1) return;
     let nextShader;
     if (this.shaderIndex >= this.shaders.length - 1) {
       this.engine.showViewportMessage(`Reached latest visualizer.`, 25);
@@ -166,26 +151,20 @@ export class MAGEVisualizer {
       nextShader = this.shaders[this.shaderIndex + 1];
       this.shaderIndex++;
     }
-    this.load({ shader: nextShader.shader, seed: nextShader.seed, addToHistory: false });
+    if (nextShader.compiledArtifact) this.loadCompiled(nextShader.shader, nextShader.compiledArtifact);else this.load({
+      shader: nextShader.shader,
+      addToHistory: false
+    });
     this.engine.showViewportMessage(`Loading next visualizer...`, 25);
-    return;
   }
-
   isLegacyShader() {
-     const shaderCode = this.getActiveShader();
-     const isLegacy = shaderCode && shaderCode.includes('let size = input()') && !shaderCode.includes('let bass = input()');
-     return isLegacy;
+    const shaderCode = this.getActiveShader();
+    const isLegacy = shaderCode && shaderCode.includes('let size = input()') && !shaderCode.includes('let bass = input()');
+    return isLegacy;
   }
-
   hasAudioInputs() {
     const shaderCode = this.getActiveShader();
-    const hasAudio = shaderCode &&
-      shaderCode.includes('let bass = input()') &&
-      shaderCode.includes('let mid = input()') &&
-      shaderCode.includes('let treble = input()') &&
-      shaderCode.includes('let energy = input()') &&
-      shaderCode.includes('let spectralCentroid = input()') &&
-      shaderCode.includes('let energyTrend = input()');
+    const hasAudio = shaderCode && shaderCode.includes('let bass = input()') && shaderCode.includes('let mid = input()') && shaderCode.includes('let treble = input()') && shaderCode.includes('let energy = input()') && shaderCode.includes('let spectralCentroid = input()') && shaderCode.includes('let energyTrend = input()');
     return hasAudio;
   }
 }

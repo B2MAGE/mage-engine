@@ -1,7 +1,7 @@
 {
-  "name": "@notrac/mage",
-  "version": "1.0.4",
-  "description": "[MAGE](https://bsiscoe.github.io/MAGE) is a AI powered music visualizer that utilizes heavy randomization of Shaderpark shaders to create unique, audio-reactive environments. Perfect for musicians looking to produce captivating music videos, artists trying to create mesmerizing visual effects, or developers exploring generative AI and audio reactive environments.\r [![Video Title](https://img.youtube.com/vi/5CxVeUv1_FY/0.jpg)](https://www.youtube.com/watch?v=5CxVeUv1_FY)",
+  "name": "@b2mage/mage-engine",
+  "version": "1.0.4-mage.1",
+  "description": "Maintained MAGE portfolio engine: bounded rendering, worker compilation, live scene settings and audio response.",
   "main": "dist/mage-engine.js",
   "module": "dist/mage-engine.js",
   "types": "dist/mage-engine.d.ts",
@@ -9,34 +9,57 @@
     ".": {
       "types": "./dist/mage-engine.d.ts",
       "import": "./dist/mage-engine.js"
+    },
+    "./audio-response": {
+      "types": "./dist/audio-response.d.ts",
+      "import": "./dist/audio-response.js"
+    },
+    "./audio-analysis": {
+      "types": "./dist/audio-analysis.d.ts",
+      "import": "./dist/audio-analysis.js"
+    },
+    "./audio-mapping": {
+      "types": "./dist/audio-mapping.d.ts",
+      "import": "./dist/audio-mapping.js"
+    },
+    "./compiler": {
+      "types": "./dist/compiler.d.ts",
+      "import": "./dist/compiler.js"
+    },
+    "./compiled-shader": {
+      "types": "./dist/compiled-shader.d.ts",
+      "import": "./dist/compiled-shader.js"
     }
   },
   "files": [
     "dist",
-    "patches"
+    "docs/maintained-engine.md"
   ],
   "scripts": {
-    "test": "node scripts/test_generated_shader_parse.cjs",
-    "build": "vite build; tsc -p tsconfig.json; node scripts/postbuild-types.cjs; node scripts/cleanup-dist.cjs"
+    "build": "node scripts/build-package.mjs",
+    "pretest": "npm run build",
+    "test": "node --test tests/*.test.mjs",
+    "prepack": "npm run build",
+    "test:upstream": "node scripts/test_generated_shader_parse.cjs && node scripts/test_audio_analysis.cjs"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bsiscoe/MAGE.git"
+    "url": "git+https://github.com/B2MAGE/mage-engine.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
   "bugs": {
-    "url": "https://github.com/bsiscoe/MAGE/issues"
+    "url": "https://github.com/B2MAGE/mage-engine/issues"
   },
-  "homepage": "https://github.com/bsiscoe/MAGE#readme",
-  "dependencies": {
-    "shader-park-core": "npm:@mage-engine/shader-park-patch@^0.2.8-patched",
-    "three": "^0.183.2",
-    "vite": "^8.0.0"
-  },
+  "homepage": "https://github.com/B2MAGE/mage-engine#readme",
   "devDependencies": {
-    "typescript": "^6.0.2"
-  }
+    "shader-park-core": "npm:@mage-engine/shader-park-patch@0.2.8-patched",
+    "three": "0.183.2",
+    "vite": "8.0.0",
+    "typescript": "6.0.2",
+    "esprima": "4.0.1"
+  },
+  "private": true
 }

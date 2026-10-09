@@ -29,13 +29,15 @@ engine.toPreset() -> returns the current preset as a MAGEPreset instance
 import { MAGEEngine } from './MAGEEngine.js';
 
 export function initMAGE({ 
-  canvas, 
+  canvas,
+  pixelRatio,
+  renderBudget,
   log = false, 
   withControls: { active = false, integrated = false } = {}, 
   autoStart = false, 
 } = {}) {
   // Initialize the MAGE Engine with the provided canvas and configuration options.
-  const engine = new MAGEEngine({ canvas, log, withControls:{ active, integrated }, autoStart });
+  const engine = new MAGEEngine({ canvas, pixelRatio, renderBudget, log, withControls:{ active, integrated }, autoStart });
 
   // Return the initialized engine and controls (if created) for external use.
   return engine;

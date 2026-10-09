@@ -1,10 +1,10 @@
-import { RenderPass } from 'three/addons/postprocessing/RenderPass'
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer'
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass'
+import { RenderPass } from 'three/addons/postprocessing/RenderPass';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { RGBShiftShader } from 'three/addons/shaders/RGBShiftShader.js';
 import { DotScreenShader } from 'three/addons/shaders/DotScreenShader.js';
-import { AfterimagePass } from 'three/addons/postprocessing/AfterimagePass.js';
+import { AfterimagePass } from './effects/AfterimagePass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GlitchPass } from './GlitchPass.js';
 import { LuminosityShader } from 'three/addons/shaders/LuminosityShader.js';
@@ -19,37 +19,27 @@ import { ToonShader1, ToonShader2, ToonShaderHatching, ToonShaderDotted } from '
 import { BleachBypassShader } from 'three/addons/shaders/BleachBypassShader.js';
 import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 import { Vector2 } from 'three';
-import {
-  LinearToneMapping,
-  CineonToneMapping,
-  ACESFilmicToneMapping,
-  NoToneMapping,
-  ReinhardToneMapping,
-  AgXToneMapping,
-  NeutralToneMapping,
-} from 'three';
+import { LinearToneMapping, CineonToneMapping, ACESFilmicToneMapping, NoToneMapping, ReinhardToneMapping, AgXToneMapping, NeutralToneMapping } from 'three';
 
 /**
  * Full-screen textured quad shader
  */
 
 const CopyShader = {
-
   name: 'CopyShader',
-
   uniforms: {
-
-    'tDiffuse': { value: null },
-    'opacity': { value: 1.0 }
-
+    'tDiffuse': {
+      value: null
+    },
+    'opacity': {
+      value: 1.0
+    }
   },
-
   vertexShader: /* glsl */`
 
 		void main() {
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     }`,
-
   fragmentShader: /* glsl */`
 
 		#define hash(x) fract(sin(x) * 43758.5453123)
@@ -115,34 +105,53 @@ void main( out vec4 fragColor, in vec2 fragCoord )
     // Output to screen
     fragColor = vec4(col,1.0);
     }`
-
 };
-
-const DEFAULT_PASS_ORDER = [
-  'glitchPass',
-  'bloom',
-  'RGBShift',
-  'dotShader',
-  'technicolorShader',
-  'luminosityShader',
-  'afterImagePass',
-  'sobelShader',
-  'colorifyShader',
-  'halftonePass',
-  'gammaCorrectionShader',
-  'kaleidoShader',
-  'copyShader',
-  'bleachBypassShader',
-  'toonShader',
-  'outputPass',
-];
+const DEFAULT_PASS_ORDER = ['glitchPass', 'bloom', 'RGBShift', 'dotShader', 'technicolorShader', 'luminosityShader', 'afterImagePass', 'sobelShader', 'colorifyShader', 'halftonePass', 'gammaCorrectionShader', 'kaleidoShader', 'copyShader', 'bleachBypassShader', 'toonShader', 'outputPass'];
 
 // threejs effects list
+var MageToonPostShader = {
+  name: "MageToonPostShader",
+  uniforms: {
+    tDiffuse: {
+      value: null
+    },
+    resolution: {
+      value: new Vector2(1, 1)
+    }
+  },
+  vertexShader: `
+		varying vec2 vUv;
+		void main() {
+			vUv = uv;
+			gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+		}`,
+  fragmentShader: `
+		uniform sampler2D tDiffuse;
+		uniform vec2 resolution;
+		varying vec2 vUv;
+		float toonLuma(vec3 color) {
+			return dot(max(color, vec3(0.0)), vec3(0.2126, 0.7152, 0.0722));
+		}
+		void main() {
+			vec4 base = texture2D(tDiffuse, vUv);
+			float luma = toonLuma(base.rgb);
+			// Quantize brightness in perceptual space; keep the original hue and
+			// allow HDR highlights through to the existing tone/output passes.
+			float band = pow(floor(pow(luma, 1.0 / 2.2) * 5.0 + 0.5) / 5.0, 2.2);
+			vec3 shaded = base.rgb * (band / max(luma, 0.00001));
+			vec2 pixel = 1.0 / max(resolution, vec2(1.0));
+			float left = toonLuma(texture2D(tDiffuse, vUv - vec2(pixel.x, 0.0)).rgb);
+			float right = toonLuma(texture2D(tDiffuse, vUv + vec2(pixel.x, 0.0)).rgb);
+			float top = toonLuma(texture2D(tDiffuse, vUv + vec2(0.0, pixel.y)).rgb);
+			float bottom = toonLuma(texture2D(tDiffuse, vUv - vec2(0.0, pixel.y)).rgb);
+			float edge = smoothstep(0.05, 0.25, length(vec2(right - left, top - bottom)));
+			gl_FragColor = vec4(shaded * (1.0 - edge * 0.65), base.a);
+		}`
+};
 export class MAGEEffects {
   constructor(engine) {
-    if (engine.log) console.log('Initializing MAGEEffects with engine instance:', engine);
+    if (engine.log) console.log("Initializing MAGEEffects with engine instance:", engine);
     this.engine = engine;
-    //console.log('Engine host:', engine.getHost());
     const fields = engine.getEngineFields();
     this.scene = fields.scene;
     this.renderer = fields.renderer;
@@ -155,209 +164,188 @@ export class MAGEEffects {
     this.passOrder = [...DEFAULT_PASS_ORDER];
     this.toneMapping = {
       exposure: 1.5,
-      method: 0,
+      method: 0
     };
     this.sobelShader = {
       shader: new ShaderPass(SobelOperatorShader),
-      enabled: false,
+      enabled: false
     };
     this.halftonePass = {
       shader: new HalftonePass(),
-      enabled: false,
+      enabled: false
     };
     this.luminosityShader = {
       shader: new ShaderPass(LuminosityShader),
-      enabled: false,
+      enabled: false
     };
     this.gammaCorrectionShader = {
       shader: new ShaderPass(GammaCorrectionShader),
-      enabled: false,
+      enabled: false
     };
     this.dotShader = {
       shader: new ShaderPass(DotScreenShader),
-      scale: 4.0,
-      enabled: false,
+      scale: 4,
+      enabled: false
     };
-    /** @type {any} */
     this.colorifyShader = {
       shader: new ShaderPass(ColorifyShader),
       enabled: false,
       color: new Color(),
       update: function () {
         this.shader.uniforms.color.value = this.color;
-      },
+      }
     };
     this.technicolorShader = {
       shader: new ShaderPass(TechnicolorShader),
-      enabled: false,
+      enabled: false
     };
-    /** @type {any} */
     this.toonShader = {
-      shader: new ShaderPass(ToonShader1),
+      shader: new ShaderPass(MageToonPostShader),
       enabled: false,
-      toonShaderChoice: 0,
-      update: function () {
-        this.shader = new ShaderPass(this.toonShaderChoice);
-      },
+      update: function (renderer) {
+        if (renderer?.getDrawingBufferSize) renderer.getDrawingBufferSize(this.shader.uniforms.resolution.value);
+      }
     };
     this.copyShader = {
       shader: new ShaderPass(CopyShader),
-      enabled: false,
+      enabled: false
     };
     this.bleachBypassShader = {
       shader: new ShaderPass(BleachBypassShader),
-      enabled: false,
+      enabled: false
     };
     this.RGBShift = {
       shader: new ShaderPass(RGBShiftShader),
-      enabled: false,
+      enabled: false
     };
-    /** @type {any} */
     this.bloom = {
       settings: {
-        strength: 1.0,
-        radius: 0.2,
-        threshold: 0.1,
+        strength: 1,
+        radius: .2,
+        threshold: .1
       },
-      shader: new UnrealBloomPass(
-        new Vector2(window.innerWidth, window.innerHeight),
-        1.6,
-        0.2,
-        0.2,
-      ),
+      shader: new UnrealBloomPass(new Vector2(1, 1), 1.6, .2, .2),
       enabled: false,
       update: function (renderer) {
-        const resolution = new Vector2(window.innerWidth, window.innerHeight);
-        if (renderer && renderer.getDrawingBufferSize) {
-          renderer.getDrawingBufferSize(resolution);
-        }
-
+        const resolution = new Vector2(1, 1);
+        if (renderer && renderer.getDrawingBufferSize) renderer.getDrawingBufferSize(resolution);
         this.shader?.dispose();
-        this.shader = new UnrealBloomPass(
-          resolution,
-          this.settings.strength,
-          this.settings.radius,
-          this.settings.threshold,
-        );
-      },
+        this.shader = new UnrealBloomPass(resolution, this.settings.strength, this.settings.radius, this.settings.threshold);
+      }
     };
     this.afterImagePass = {
       shader: new AfterimagePass(),
-      enabled: false,
+      enabled: false
     };
     this.kaleidoShader = {
       shader: new ShaderPass(KaleidoShader),
-      enabled: false,
+      enabled: false
     };
     this.glitchPass = {
-      threshold: 0.025,
-      shader: new GlitchPass(() => {
-        const trigger = engine.glitchPassTrigger;
-        const thresh = this.glitchPass.threshold;
-        return trigger > thresh;
-      }, 64),
-      enabled: false,
+      shader: new GlitchPass(64),
+      enabled: false
     };
     this.outputPass = {
       shader: new OutputPass(),
-      enabled: true,
+      enabled: true
     };
   }
-
-  getBloomEnabled = () => this.bloom.enabled
-  setBloomEnabled = (value) => {
+  getBloomEnabled = () => this.bloom.enabled;
+  setBloomEnabled = value => {
     this.bloom.enabled = Boolean(value);
     this.engine.refreshFx();
-  }
-  getBloomStrength = () => this.bloom.settings.strength
-  setBloomStrength = (value) => {
+  };
+  getBloomStrength = () => this.bloom.settings.strength;
+  setBloomStrength = value => {
     this.bloom.settings.strength = Number(value);
-  }
-  getBloomRadius = () => this.bloom.settings.radius
-  setBloomRadius = (value) => {
+  };
+  getBloomRadius = () => this.bloom.settings.radius;
+  setBloomRadius = value => {
     this.bloom.settings.radius = Number(value);
-  }
-  getBloomThreshold = () => this.bloom.settings.threshold
-  setBloomThreshold = (value) => {
+  };
+  getBloomThreshold = () => this.bloom.settings.threshold;
+  setBloomThreshold = value => {
     this.bloom.settings.threshold = Number(value);
-  }
+  };
 
   // RGB Shift Controls
-  getRGBShiftEnabled = () => this.RGBShift.enabled
-  setRGBShiftEnabled = (value) => {
+  getRGBShiftEnabled = () => this.RGBShift.enabled;
+  setRGBShiftEnabled = value => {
     this.RGBShift.enabled = Boolean(value);
     this.engine.refreshFx();
-  }
-  getRGBShiftAmount = () => this.RGBShift.shader.uniforms.amount.value
-  setRGBShiftAmount = (value) => {
+  };
+  getRGBShiftAmount = () => this.RGBShift.shader.uniforms.amount.value;
+  setRGBShiftAmount = value => {
     this.RGBShift.shader.uniforms.amount.value = Number(value);
-  }
-  getRGBShiftAngle = () => this.RGBShift.shader.uniforms.angle.value
-  setRGBShiftAngle = (value) => {
+  };
+  getRGBShiftAngle = () => this.RGBShift.shader.uniforms.angle.value;
+  setRGBShiftAngle = value => {
     this.RGBShift.shader.uniforms.angle.value = Number(value);
-  }
+  };
 
   // After Image Controls
-  getAfterImageEnabled = () => this.afterImagePass.enabled
-  setAfterImageEnabled = (value) => {
+  getAfterImageEnabled = () => this.afterImagePass.enabled;
+  setAfterImageEnabled = value => {
     this.afterImagePass.enabled = Boolean(value);
     this.engine.refreshFx();
-  }
-  getAfterImageDamp = () => this.afterImagePass.shader.uniforms.damp.value
-  setAfterImageDamp = (value) => {
+  };
+  getAfterImageDamp = () => this.afterImagePass.shader.uniforms.damp.value;
+  setAfterImageDamp = value => {
     this.afterImagePass.shader.uniforms.damp.value = Number(value);
-  }
+  };
 
   // Colorify Controls
-  getColorifyEnabled = () => this.colorifyShader.enabled
-  setColorifyEnabled = (value) => {
+  getColorifyEnabled = () => this.colorifyShader.enabled;
+  setColorifyEnabled = value => {
     this.colorifyShader.enabled = Boolean(value);
     this.engine.refreshFx();
-  }
-  getColorifyColor = () => this.colorifyShader.color.getHex()
-  setColorifyColor = (hex) => {
+  };
+  getColorifyColor = () => this.colorifyShader.color.getHex();
+  setColorifyColor = hex => {
     this.colorifyShader.color.setHex(Number(hex));
-  }
+  };
 
   // Kaleid Controls
-  getKaleidEnabled = () => this.kaleidoShader.enabled
-  setKaleidEnabled = (value) => {
+  getKaleidEnabled = () => this.kaleidoShader.enabled;
+  setKaleidEnabled = value => {
     this.kaleidoShader.enabled = Boolean(value);
     this.engine.refreshFx();
-  }
-  getKaleidSides = () => this.kaleidoShader.shader.uniforms.sides.value
-  setKaleidSides = (value) => {
+  };
+  getKaleidSides = () => this.kaleidoShader.shader.uniforms.sides.value;
+  setKaleidSides = value => {
     this.kaleidoShader.shader.uniforms.sides.value = Number(value);
-  }
-  getKaleidAngle = () => this.kaleidoShader.shader.uniforms.angle.value
-  setKaleidAngle = (value) => {
+  };
+  getKaleidAngle = () => this.kaleidoShader.shader.uniforms.angle.value;
+  setKaleidAngle = value => {
     this.kaleidoShader.shader.uniforms.angle.value = Number(value);
-  }
+  };
 
   // Tone Mapping Controls
-  getToneMappingMethod = () => this.toneMapping.method
-  setToneMappingMethod = (method) => {
+  getToneMappingMethod = () => this.toneMapping.method;
+  setToneMappingMethod = method => {
     this.toneMapping.method = method;
     this.engine.setToneMapping(method);
-  }
-  getToneMappingExposure = () => this.engine.getToneMappingExposure()
-  setToneMappingExposure = (value) => {
+  };
+  getToneMappingExposure = () => this.engine.getToneMappingExposure();
+  setToneMappingExposure = value => {
     this.toneMapping.exposure = Number(value);
     this.engine.setToneMappingExposure(Number(value));
-  }
+  };
 
   // custom glitch pass trigger based on audio input function
-  getGlitchEnabled = () => this.glitchPass?.enabled || false
-  setGlitchEnabled = (value) => {
+  getGlitchEnabled = () => this.glitchPass?.enabled || false;
+  setGlitchEnabled = value => {
     if (this.glitchPass) {
       this.glitchPass.enabled = Boolean(value);
       this.engine.refreshFx();
     }
-  }
-  setGlitchThreshold = (percentage) => {
+  };
+  setGlitchThreshold = percentage => {
     this.glitchPass.threshold = Number(percentage);
-  }
-  getGlitchThreshold = () => { return this.glitchPass.threshold; };
+  };
+  getGlitchThreshold = () => {
+    return this.glitchPass.threshold;
+  };
   normalizeGlitchThreshold = async () => {
     const threshold = await this._normalizeThresholdWithBuffer(() => this.engine.glitchPassTrigger);
     if (Number.isFinite(threshold)) {
@@ -367,75 +355,68 @@ export class MAGEEffects {
   };
 
   // Individual Pass Toggles
-  getDotEnabled = () => this.dotShader.enabled
-  setDotEnabled = (value) => {
+  getDotEnabled = () => this.dotShader.enabled;
+  setDotEnabled = value => {
     this.dotShader.enabled = Boolean(value);
     this.engine.refreshFx();
-  }
-  getTechnicolorEnabled = () => this.technicolorShader.enabled
-  setTechnicolorEnabled = (value) => {
+  };
+  getTechnicolorEnabled = () => this.technicolorShader.enabled;
+  setTechnicolorEnabled = value => {
     this.technicolorShader.enabled = Boolean(value);
     this.engine.refreshFx();
-  }
-  getLuminosityEnabled = () => this.luminosityShader.enabled
-  setLuminosityEnabled = (value) => {
+  };
+  getLuminosityEnabled = () => this.luminosityShader.enabled;
+  setLuminosityEnabled = value => {
     this.luminosityShader.enabled = Boolean(value);
     this.engine.refreshFx();
-  }
-  getSobelEnabled = () => this.sobelShader.enabled
-  setSobelEnabled = (value) => {
+  };
+  getSobelEnabled = () => this.sobelShader.enabled;
+  setSobelEnabled = value => {
     this.sobelShader.enabled = Boolean(value);
     this.engine.refreshFx();
-  }
-  getHalftoneEnabled = () => this.halftonePass.enabled
-  setHalftoneEnabled = (value) => {
+  };
+  getHalftoneEnabled = () => this.halftonePass.enabled;
+  setHalftoneEnabled = value => {
     this.halftonePass.enabled = Boolean(value);
     this.engine.refreshFx();
-  }
-  getGammaCorrectionEnabled = () => this.gammaCorrectionShader.enabled
-  setGammaCorrectionEnabled = (value) => {
+  };
+  getGammaCorrectionEnabled = () => this.gammaCorrectionShader.enabled;
+  setGammaCorrectionEnabled = value => {
     this.gammaCorrectionShader.enabled = Boolean(value);
     this.engine.refreshFx();
-  }
-  getCopyShaderEnabled = () => this.copyShader.enabled
-  setCopyShaderEnabled = (value) => {
+  };
+  getCopyShaderEnabled = () => this.copyShader.enabled;
+  setCopyShaderEnabled = value => {
     this.copyShader.enabled = Boolean(value);
     this.engine.refreshFx();
-  }
-  getBleachBypassEnabled = () => this.bleachBypassShader.enabled
-  setBleachBypassEnabled = (value) => {
+  };
+  getBleachBypassEnabled = () => this.bleachBypassShader.enabled;
+  setBleachBypassEnabled = value => {
     this.bleachBypassShader.enabled = Boolean(value);
     this.engine.refreshFx();
-  }
-  getToonEnabled = () => this.toonShader.enabled
-  setToonEnabled = (value) => {
+  };
+  getToonEnabled = () => this.toonShader.enabled;
+  setToonEnabled = value => {
     this.toonShader.enabled = Boolean(value);
     this.engine.refreshFx();
-  }
-  getOutputPassEnabled = () => this.outputPass.enabled
-  setOutputPassEnabled = (value) => {
+  };
+  getOutputPassEnabled = () => this.outputPass.enabled;
+  setOutputPassEnabled = value => {
     this.outputPass.enabled = Boolean(value);
     this.engine.refreshFx();
-  }
-
+  };
   getPassOrder() {
     return [...this.passOrder];
   }
-
   getDefaultPassOrder() {
     return [...DEFAULT_PASS_ORDER];
   }
-
   setPassOrder(nextOrder) {
     if (!Array.isArray(nextOrder)) {
       return false;
     }
-
     const requested = nextOrder.filter(value => typeof value === 'string');
-    const valid = requested.filter(
-      passId => this[passId] && typeof this[passId] === 'object' && this[passId].shader,
-    );
-
+    const valid = requested.filter(passId => this[passId] && typeof this[passId] === 'object' && this[passId].shader);
     const seen = new Set();
     const deduped = [];
     for (const passId of valid) {
@@ -445,7 +426,6 @@ export class MAGEEffects {
       seen.add(passId);
       deduped.push(passId);
     }
-
     for (const passId of DEFAULT_PASS_ORDER) {
       if (seen.has(passId)) {
         continue;
@@ -455,12 +435,10 @@ export class MAGEEffects {
         deduped.push(passId);
       }
     }
-
     this.passOrder = deduped.filter(passId => passId !== 'outputPass');
     this.passOrder.push('outputPass');
     return true;
   }
-
   movePass(passId, direction) {
     if (!passId || typeof passId !== 'string') {
       return false;
@@ -468,18 +446,15 @@ export class MAGEEffects {
     if (passId === 'outputPass') {
       return false;
     }
-
     const order = this.getPassOrder();
     const index = order.indexOf(passId);
     if (index < 0) {
       return false;
     }
-
     const delta = direction === 'up' ? -1 : direction === 'down' ? 1 : 0;
     if (delta === 0) {
       return false;
     }
-
     const nextIndex = index + delta;
     if (nextIndex < 0 || nextIndex >= order.length) {
       return false;
@@ -487,81 +462,68 @@ export class MAGEEffects {
     if (order[nextIndex] === 'outputPass') {
       return false;
     }
-
     [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
     this.setPassOrder(order);
     return true;
   }
-
   applyPostProcessing(scene, renderer, camera, composer) {
-    this.bloom.update(renderer);
-    this.toonShader.update();
+    this.toonShader.update(renderer);
     this.colorifyShader.update();
-
     composer?.dispose();
     const newComposer = new EffectComposer(renderer);
     newComposer.addPass(new RenderPass(scene, camera));
-
-    const orderedPassIds = this.getPassOrder();
-
-    orderedPassIds.forEach(passId => {
+    let optionalEffects = 0;
+    this.getPassOrder().forEach(passId => {
       const passConfig = this[passId];
-      if (!passConfig || !passConfig.enabled) {
-        return;
-      }
+      if (!passConfig || !passConfig.enabled) return;
+      if (passId !== "outputPass" && passId !== "copyShader" && optionalEffects++ >= 4) return;
+      if (passId === "bloom") this.bloom.update(renderer);
       newComposer.addPass(passConfig.shader);
     });
-
     return newComposer;
   }
-
   randomizeSettings() {
     const engine = this.engine;
-    const { visualizer, state, controls, camera, renderer, pane, fxStudioOverlay, sceneCameraDock } = engine.getEngineFields();
+    const {
+      visualizer,
+      state,
+      controls,
+      camera,
+      renderer,
+      pane,
+      fxStudioOverlay,
+      sceneCameraDock
+    } = engine.getEngineFields();
     const randRange = (min, max) => Math.random() * (max - min) + min;
     const randInt = (min, max) => Math.floor(randRange(min, max + 1));
     const randBool = (chance = 0.5) => Math.random() < chance;
-
     state.minimizing_factor = randRange(0.01, 2.0);
     state.power_factor = randRange(1.0, 10.0);
     state.pointerDownMultiplier = randRange(0.0, 1.0);
     state.base_speed = randRange(0.01, 0.9);
     state.easing_speed = randRange(0.01, 0.9);
     visualizer.scale = randRange(1.0, 200.0);
-
     controls.autoRotate = randBool(0.5);
     controls.autoRotateSpeed = randRange(0.1, 50.0);
-
     camera.fov = randRange(1.0, 359.0);
     camera.updateProjectionMatrix();
-
     state.camTilt = randRange(0.0, 2 * Math.PI);
-    camera.up.set(
-      Math.sin(state.camTilt),
-      Math.cos(state.camTilt),
-      -Math.sin(state.camTilt),
-    );
-
+    camera.up.set(Math.sin(state.camTilt), Math.cos(state.camTilt), -Math.sin(state.camTilt));
     engine.setRandomSkybox();
     engine.fx.bloom.enabled = randBool(0.55);
     engine.fx.bloom.settings.strength = randRange(0.0, 10.0);
     engine.fx.bloom.settings.radius = randRange(-10.0, 10.0);
     engine.fx.bloom.settings.threshold = randRange(0.0, 10.0);
-
     engine.fx.RGBShift.enabled = randBool(0.4);
     engine.fx.RGBShift.shader.uniforms.amount.value = randRange(0.0, 0.1);
     engine.fx.RGBShift.shader.uniforms.angle.value = randRange(0.0, 2 * Math.PI);
-
     engine.fx.afterImagePass.enabled = randBool(0.35);
     engine.fx.afterImagePass.shader.uniforms.damp.value = randRange(0.0, 1.0);
-
     engine.fx.colorifyShader.enabled = randBool(0.35);
     engine.fx.colorifyShader.color.setHSL(Math.random(), randRange(0.2, 1.0), randRange(0.2, 0.8));
-
     engine.fx.kaleidoShader.enabled = randBool(0.3);
     engine.fx.kaleidoShader.shader.uniforms.sides.value = randInt(1, 24);
     engine.fx.kaleidoShader.shader.uniforms.angle.value = randRange(0.0, 2 * Math.PI);
-
     engine.fx.glitchPass.enabled = randBool(0.25);
     engine.fx.dotShader.enabled = randBool(0.25);
     engine.fx.technicolorShader.enabled = randBool(0.25);
@@ -572,20 +534,10 @@ export class MAGEEffects {
     engine.fx.copyShader.enabled = randBool(0.2);
     engine.fx.bleachBypassShader.enabled = randBool(0.2);
     engine.fx.toonShader.enabled = randBool(0.2);
-
-    const toneMappingMethods = [
-      LinearToneMapping,
-      CineonToneMapping,
-      ACESFilmicToneMapping,
-      NoToneMapping,
-      ReinhardToneMapping,
-      AgXToneMapping,
-      NeutralToneMapping,
-    ];
+    const toneMappingMethods = [LinearToneMapping, CineonToneMapping, ACESFilmicToneMapping, NoToneMapping, ReinhardToneMapping, AgXToneMapping, NeutralToneMapping];
     engine.fx.toneMapping.method = toneMappingMethods[randInt(0, toneMappingMethods.length - 1)];
     renderer.toneMapping = engine.fx.toneMapping.method;
     renderer.toneMappingExposure = randRange(-500.0, 500.0);
-
     const currentOrder = engine.fx.getPassOrder();
     const shuffled = currentOrder.filter(passId => passId !== 'outputPass');
     for (let i = shuffled.length - 1; i > 0; i -= 1) {
@@ -593,7 +545,6 @@ export class MAGEEffects {
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     engine.fx.setPassOrder([...shuffled, 'outputPass']);
-
     controls.update();
     if (pane) {
       pane.refresh();
@@ -601,63 +552,48 @@ export class MAGEEffects {
     fxStudioOverlay?.refresh();
     sceneCameraDock?.refresh();
     engine.refreshFx();
-  };
-
+  }
   async _normalizeThresholdWithBuffer(getTriggerValueFn) {
     const sampleDurationMs = 3000;
     const samples = [];
     const startTime = performance.now();
-
     return await new Promise(resolve => {
       let resolved = false;
-
       const finish = () => {
         if (resolved) {
           return;
         }
         resolved = true;
-
         if (samples.length === 0) {
           resolve(this.glitchPass.threshold);
           return;
         }
-
         samples.sort((a, b) => a - b);
         const lastIndex = samples.length - 1;
         const percentileIndex = Math.min(lastIndex, Math.max(0, Math.floor(lastIndex * 0.9)));
         const upperQuartileIndex = Math.min(lastIndex, Math.max(0, Math.floor(lastIndex * 0.75)));
         const highSample = samples[percentileIndex];
         const upperQuartile = samples[upperQuartileIndex];
-
-        const blendedThreshold = Number.isFinite(highSample) && Number.isFinite(upperQuartile)
-          ? (highSample * 0.7) + (upperQuartile * 0.3)
-          : highSample;
-
+        const blendedThreshold = Number.isFinite(highSample) && Number.isFinite(upperQuartile) ? highSample * 0.7 + upperQuartile * 0.3 : highSample;
         resolve(Number.isFinite(blendedThreshold) ? Math.max(0, blendedThreshold) : this.glitchPass.threshold);
       };
-
       const sampleFrame = () => {
         if (resolved) {
           return;
         }
-
         const value = Number(getTriggerValueFn?.());
         if (Number.isFinite(value)) {
           samples.push(value);
         }
-
         if (performance.now() - startTime >= sampleDurationMs) {
           finish();
           return;
         }
-
         requestAnimationFrame(sampleFrame);
       };
-
       requestAnimationFrame(sampleFrame);
       setTimeout(finish, sampleDurationMs);
     });
   }
 }
-
 export default MAGEEffects;
