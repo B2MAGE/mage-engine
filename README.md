@@ -1,5 +1,15 @@
 # MAGE: Musical Autonomous Generated Environments
 
+This is the maintained **B2MAGE portfolio engine fork**. Its source package is `@b2mage/mage-engine`, delivered as a pinned GitHub Release tarball, not published under the upstream npm namespace. See [the maintained engine guide](docs/maintained-engine.md) for source ownership, the compiler/runtime boundary, tests and release instructions.
+
+```sh
+npm ci
+npm test
+npm pack
+```
+
+The sections below retain the original project's background and API reference.
+
 [MAGE](https://bsiscoe.github.io/MAGE) is a AI powered music visualizer that utilizes heavy randomization of Shaderpark shaders to create unique, audio-reactive environments. Perfect for musicians looking to produce captivating music videos, artists trying to create mesmerizing visual effects, or developers exploring generative AI and audio reactive environments.
 [![Video Title](https://img.youtube.com/vi/5CxVeUv1_FY/0.jpg)](https://www.youtube.com/watch?v=5CxVeUv1_FY)
 
@@ -23,9 +33,9 @@
 [MAGE](https://bsiscoe.github.io/MAGE) is live on GitHub Pages and runs as a static HTML site. Its use is quite simple and I have provided a video guide to explain its key features and core concept in more detail.
 [![Video Title](https://img.youtube.com/vi/WGWesdaAZIg/0.jpg)](https://www.youtube.com/watch?v=WGWesdaAZIg)
 
-### Using as an npm Package
+### Original upstream npm package
 
-To use MAGE as a library in your own project:
+The original upstream package remains available separately. The portfolio frontend uses this fork's release asset as described above:
 
 ```bash
 npm install @notrac/mage
@@ -49,7 +59,7 @@ engine.fx.setBloomEnabled(true);
 
 ## Public API
 
-The generated declaration file is [dist/mage-engine.d.ts](dist/mage-engine.d.ts). The public API below matches that surface.
+The maintained declaration file is [types/mage-engine.d.ts](types/mage-engine.d.ts), copied into `dist/` during the package build.
 
 ### `initMAGE(options?)`
 
@@ -259,28 +269,13 @@ MAGE is primarily made in Javascript and leverages the following libraries:
 Vanilla HTML, CSS, and JavaScript are used for the frontend.
 
 ## Embedded Presets And Skyboxes
-Preset JSON and skybox textures are embedded in JavaScript automatically during `vite build`.
+Preset JSON is embedded by Vite's eager imports during `npm run build`. The existing embedded skybox module is bundled with the engine.
 
-Preset embedding source order per `resources/presetX/`:
+Preset embedding source order per `resources/presets/presetX/`:
 - `preset.v2.json` (preferred)
 - `preset.json` (fallback)
 
-To manually regenerate embedded assets:
-
-```bash
-npm run generate:embedded-presets
-npm run generate:embedded-skyboxes
-```
-
-These scripts update:
-- `js/presets.js`
-- `js/embedded-skyboxes.js`
-
-How to add more skyboxes later:
-- Add a new folder like `resources/preset11/`.
-- Add `preset.v2.json` (or `preset.json`) in that folder.
-- Include all six faces (`sky_left`, `sky_right`, `sky_up`, `sky_down`, `sky_front`, `sky_back`) with supported extensions.
-- Run `npx vite build` and the embed file is regenerated automatically before bundling.
+The previously documented `generate:embedded-*` scripts do not exist in the current upstream source. Do not edit built package files to change presets or skyboxes; use the source resources and verify the resulting package.
 
 Runtime loading behavior:
 - Presets: in dev mode (`vite`), controls try real resource JSON first, then embedded fallback.

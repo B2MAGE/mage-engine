@@ -8,38 +8,42 @@ MAGE is a browser-based music visualizer engine/library built with Three.js + Sh
 ## Read First
 - `README.md`
 - `package.json`
-- `vite.config.js`
+- `scripts/build-package.mjs`
+- `docs/maintained-engine.md`
 - `js/mage-lib.js` (public library entrypoint)
 - `js/MAGEEngine.js` (main orchestration)
 - `js/MAGEVisualizer.js` (shader/geometry flow)
-- `js/MAGEEffects.js` (post-processing pipeline)
+- `js/MAGEFx.js` (post-processing pipeline)
 - `schema.js` (preset schema shape)
 
 ## Working Commands
-- Install deps: `npm install`
-- Dev server: `npx vite`
+- Install pinned deps: `npm ci`
+- Dev server (after build): `npx vite`
 - Build package: `npm run build`
-- Regenerate embedded presets only: `npm run generate:embedded-presets`
-- Regenerate embedded skyboxes only: `npm run generate:embedded-skyboxes`
+- Verify source and production package behavior: `npm test`
+- Generate the release tarball: `npm pack`
 
 Notes:
-- `npm test` is a placeholder and intentionally fails.
+- `npm test` rebuilds first and must pass. The unchanged upstream audio diagnostic has known failures documented in `docs/maintained-engine.md`.
 - Vite dev server is configured for port `5173` with strict port mode.
 
 ## Architecture Boundaries
 - `js/mage-lib.js` exports `initMAGE(...)` and is the package entrypoint.
 - `js/MAGEEngine.js` owns lifecycle, scene/camera/renderer, audio wiring, input bridges, and hooks.
 - `js/MAGEVisualizer.js` handles generated shader logic and sculpture updates.
-- `js/MAGEEffects.js` manages post-processing effects and ordering.
+- `js/MAGEFx.js` manages post-processing effects and ordering.
 - `js/MAGEPreset.js` defines preset serialization/deserialization behavior.
 - `js/MAGEPresetDock.js` handles preset dock UI behavior.
-- `scripts/*.cjs` are build-time generators/cleanup scripts.
+- `scripts/build-package.mjs` is the package build pipeline; `types/` owns the public declaration surface.
+- Untrusted source is evaluated only in the consuming application's disposable compiler worker; renderer calls use `loadCompiledPreset` with validated inert data.
 
 ## Generated Files And Edit Rules
 - Do not hand-edit `js/presets.js` or `js/skyboxes.js`; they are generated.
 - Source of truth for generated presets is `resources/presets/**/preset.v2.json` (or fallback `preset.json`).
 - Source of truth for embedded skyboxes is `resources/skyboxes/**` with all 6 required faces.
-- `npm run build` triggers embed generation via `vite.config.js` build plugin before bundling.
+- Presets are embedded by eager Vite imports. `js/skyboxes.js` is the existing embedded skybox module.
+- `js/compiled-shader-shell.generated.js` is generated from literal strings in the pinned ShaderPark dependency; never hand-edit it.
+- Do not patch `node_modules`, hand-edit `dist`, or scrape compiled engine functions to maintain behavior. Keep logic in source modules.
 - `dist/*` artifacts are build outputs; regenerate instead of manual edits.
 
 ## Conventions
@@ -61,4 +65,4 @@ Notes:
 ## Documentation Links
 - Main usage and behavior notes: [README](./README.md)
 - Preset schema sample: [schema.js](./schema.js)
-- Build-time embed hooks: [vite.config.js](./vite.config.js)
+- Maintained build and release workflow: [guide](./docs/maintained-engine.md)

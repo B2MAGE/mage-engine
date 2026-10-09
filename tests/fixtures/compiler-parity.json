@@ -1,0 +1,293 @@
+{
+  "baseline": "@notrac/mage@1.0.3 with mage-frontend commit 20605c7 patch",
+  "fixtures": [
+    {
+      "sceneId": "template:embedded-scene-0@1",
+      "source": "\n      let size = input()\n      let pointerDown = input()\n      time = .3*time\n      size *= 1.3\n      rotateY(mouse.x * -2 * PI / 2 * (1+nsin(time)))\n      rotateX(mouse.y * 2 * PI / 2 * (1+nsin(time)))\n      metal(.5*size)\n      let rayDir = normalize(getRayDirection())\n      let clampedColor = vec3(rayDir.x+.2, rayDir.y+.25, rayDir.z+.2)\n      color(clampedColor)\n\n      rotateY(sin(getRayDirection().y*8*(ncos(sin(time)))+size))\n      rotateX(cos((getRayDirection().x*16*nsin(time)+size)))\n      rotateZ(ncos((getRayDirection().z*4*cos(time)+size)))\n      boxFrame(vec3(size), size*.1)\n      shine(0.8*size)\n      blend(nsin(time*(size))*0.1+0.1)\n      sphere(size/2-pointerDown*.3)\n      blend(ncos((time*(size)))*0.1+0.1)\n      boxFrame(vec3(size-.075*pointerDown), size)\n    ",
+      "outputs": [
+        {
+          "ceiling": 32,
+          "sha256": "0a4b58602c919a9c8e4776decf846c69a6a0e1c5f6bc192654895d881d232835"
+        },
+        {
+          "ceiling": 96,
+          "sha256": "4628e5f7fe183aebaf892d2f800ea82db99490988eb8a0bf342c9fffc114a8c9"
+        },
+        {
+          "ceiling": 200,
+          "sha256": "bfc75bc4f307dd2aafd5412c10136a6f8bc4e72bdcdd5d44ec4c76d4435515d0"
+        }
+      ]
+    },
+    {
+      "sceneId": "template:embedded-scene-1@1",
+      "source": "\n      setMaxIterations(101);\n      setStepSize(0.7260629659452175);\n\n      let size = input();\n      let pointerDown = input();\n      time *= .1;\n      rotateY(mouse.x * -5 * PI / 2 + time - (pointerDown + 0.1));\n      rotateX(mouse.y * 5 * PI / 2 + time);\n\n      color(0.43262751221303614, 0.4925493880484813, 0.4820048306239232);\n\n      rotateX(getRayDirection().y * 1.2506225601940093 + time);\n      rotateY(getRayDirection().x * 1.2506225601940093 + time);\n      rotateZ(getRayDirection().z * 1.2506225601940093 + time);\n\n      metal(0.5870582642599769 * size);\n      shine(0.6708057727257557);\n\n      grid(\n        3,\n        size * 0.7174867540818692 - pointerDown * 0.05 / 3,\n        0.01 * size * 0.7174867540818692 - pointerDown * 0.05,\n      );\n      boxFrame(\n        vec3(size * 0.6287507765216367 - pointerDown * 0.05),\n        size * 0.6287507765216367 - pointerDown * 0.05 * 0.1,\n      );\n      boxFrame(\n        vec3(size * 0.6816361304019778 - pointerDown * 0.05),\n        size * 0.6816361304019778 - pointerDown * 0.05 * 0.1,\n      );\n\n      blend(nsin(time * size) * 0.22812291319767167);\n\n      boxFrame(vec3(size * 0.7), size * 0.05);\n    ",
+      "outputs": [
+        {
+          "ceiling": 32,
+          "sha256": "b473818be72890433f13ba4ce5ba5c32085eb6b56ebc974c2db45131846d8602"
+        },
+        {
+          "ceiling": 96,
+          "sha256": "1daf4db45e4aa73c4cea290257fb5d3c15e3d6b9f8d570461a83b23574aa3de8"
+        },
+        {
+          "ceiling": 200,
+          "sha256": "19eab846e60c80febb66e2463b9a9aa92219145fedd4c768b13b5636f17c16aa"
+        }
+      ]
+    },
+    {
+      "sceneId": "template:embedded-scene-2@1",
+      "source": "\n      setMaxIterations(133);\n      setStepSize(0.8632297724861512);\n\n      let size = input();\n      let pointerDown = input();\n      time *= 0.131579219319508;\n      rotateY(mouse.x * -5 * PI / 2 + time - (pointerDown + 0.1));\n      rotateX(mouse.y * 5 * PI / 2 + time);\n\n      color(0.08256470259178794, 0.782309705948631, 0.763003005740327);\n\n      let s = getSpace();\n\n      rotateX(getRayDirection().y * 2.154824707715323 + time);\n      rotateY(getRayDirection().x * 2.583074645636565 + time);\n      rotateZ(getRayDirection().z * 2.9303390219795165 + time);\n\n      metal(0.5728721327171771 * size);\n      shine(0.36898649780731946);\n\n      expand(noise(s * 0.1080185521425232) * 0.39571611124777173);\n      boxFrame(\n        vec3(size * 0.8865473246350158 - pointerDown * 0.05),\n        size * 0.8865473246350158 - pointerDown * 0.05 * 0.1,\n      );\n      expand(noise(s * 1.768209282106819) * 0.030656382800295368);\n      boxFrame(\n        vec3(size * 0.6350550547291461 - pointerDown * 0.05),\n        size * 0.6350550547291461 - pointerDown * 0.05 * 0.1,\n      );\n      expand(noise(s * 0.22270041645902117) * 0.41792724482850996);\n      grid(\n        3,\n        size * 0.6596742230897178 - pointerDown * 0.05 / 3,\n        0.01 * size * 0.6596742230897178 - pointerDown * 0.05,\n      );\n\n      blend(nsin(time * size) * 0.280208045235598);\n\n      grid(1.99, size * 4, max(0.001, size * 0.003));\n    ",
+      "outputs": [
+        {
+          "ceiling": 32,
+          "sha256": "5e628309c8ba0f60905af60126b76ff829bbe6e165fe47441d1d46c1ea1b5d43"
+        },
+        {
+          "ceiling": 96,
+          "sha256": "1662bfd80e085fe4a73dc91d7b2877d2cfa4533594e48c21a98d0fecca2a83ce"
+        },
+        {
+          "ceiling": 200,
+          "sha256": "653ddc6a2dd157d67e9a23f63e998314e8ffc6fe5ab5ed61b6c66a8239a36bdc"
+        }
+      ]
+    },
+    {
+      "sceneId": "template:embedded-scene-3@1",
+      "source": "\n      setMaxIterations(71);\n      setStepSize(0.4414923770441956);\n\n      let size = input();\n      let pointerDown = input();\n      time *= .1;\n      rotateY(mouse.x * -5 * PI / 2 + time - (pointerDown + 0.1));\n      rotateX(mouse.y * 5 * PI / 2 + time);\n\n      color(0.14998612477802592, 0.47642472828922455, 0.0644383761978728);\n\n      rotateX(getRayDirection().y * 2.9789122078821793 + time);\n      rotateY(getRayDirection().x * 2.9789122078821793 + time);\n      rotateZ(getRayDirection().z * 2.9789122078821793 + time);\n\n      metal(0.6434036988763767 * size);\n      shine(0.34486068234140727);\n\n      boxFrame(\n        vec3(size * 0.8239408771788657 - pointerDown * 0.05),\n        size * 0.8239408771788657 - pointerDown * 0.05 * 0.1,\n      );\n      boxFrame(\n        vec3(size * 0.9606847874663808 - pointerDown * 0.05),\n        size * 0.9606847874663808 - pointerDown * 0.05 * 0.1,\n      );\n\n      blend(nsin(time * size) * 0.25980941491680876);\n\n      grid(2, size * 4, max(0.001, size * 0.003));\n    ",
+      "outputs": [
+        {
+          "ceiling": 32,
+          "sha256": "9fd45bf0e718a47b8f9a68dc0f716a47cfaa71d5929d9fa2ede156afb54c6a00"
+        },
+        {
+          "ceiling": 96,
+          "sha256": "3b78fbf14ba86439e02a68a90a0ad81da365097596e7cc36e208e0f9f1dcb99d"
+        },
+        {
+          "ceiling": 200,
+          "sha256": "3b78fbf14ba86439e02a68a90a0ad81da365097596e7cc36e208e0f9f1dcb99d"
+        }
+      ]
+    },
+    {
+      "sceneId": "template:embedded-scene-4@1",
+      "source": "\n      setMaxIterations(161);\n      setStepSize(0.7431197197400152);\n\n      let size = input();\n      let pointerDown = input();\n      time *= 0.15934458017140202;\n      rotateY(mouse.x * -5 * PI / 2 + time - (pointerDown + 0.1));\n      rotateX(mouse.y * 5 * PI / 2 + time);\n\n      color(0.8939736534961771, 0.15343539973164377, 0.2647498251648912);\n\n      let s = getSpace();\n\n      rotateX(getRayDirection().y * 2.4340193013105202 + time);\n      rotateY(getRayDirection().x * 1.7776157305492712 + time);\n      rotateZ(getRayDirection().z * 1.7322517724210127 + time);\n\n      metal(0.5135977939307566 * size);\n      shine(0.4793980848131761);\n\n      boxFrame(\n        vec3(size * 0.8161210436163664 - pointerDown * 0.05),\n        size * 0.8161210436163664 - pointerDown * 0.05 * 0.1,\n      );\n      cylinder(\n        size * 0.8534422954798347 - pointerDown * 0.05 / 4,\n        size * 0.8534422954798347 - pointerDown * 0.05,\n      );\n      cylinder(\n        size * 0.7693094322944559 - pointerDown * 0.05 / 4,\n        size * 0.7693094322944559 - pointerDown * 0.05,\n      );\n      expand(noise(s * 0.1959164091445773) * 0.09097642567410547);\n      sphere(size * 0.886879464900987 - pointerDown * 0.05 / 2);\n\n      blend(nsin(time * size) * 0.17222512677372692);\n\n      grid(1, size * 4, max(0.001, size * 0.003));\n    ",
+      "outputs": [
+        {
+          "ceiling": 32,
+          "sha256": "efc719d2f4d5f78a19edb5e71f9caee7149a0d650296338d169248d326fa7dfc"
+        },
+        {
+          "ceiling": 96,
+          "sha256": "bcd765363d308ebbc2ec0de11567de8dadc9a84d526e895e218c326dabb1d6bb"
+        },
+        {
+          "ceiling": 200,
+          "sha256": "0dbff566911f425abfaaeb09b48ffe82903cd5379b26257f5f5ea516f4e563fc"
+        }
+      ]
+    },
+    {
+      "sceneId": "template:embedded-scene-5@1",
+      "source": "\n      setMaxIterations(56);\n      setStepSize(0.04586632133333666);\n\n      let size = input();\n      let pointerDown = input();\n      time *= .1;\n      rotateY(mouse.x * -5 * PI / 2 + time - (pointerDown + 0.1));\n      rotateX(mouse.y * 5 * PI / 2 + time);\n\n      color(0.24020625518667676, 0.2651915227911193, 0.21629480224767128);\n\n      rotateX(getRayDirection().y * 1.9599006869721014 + time);\n      rotateY(getRayDirection().x * 1.9599006869721014 + time);\n      rotateZ(getRayDirection().z * 1.9599006869721014 + time);\n\n      metal(0.6304962928840792 * size);\n      shine(0.6210181878056416);\n\n      cylinder(\n        size * 0.9446738625954518 - pointerDown * 0.05 / 4,\n        size * 0.9446738625954518 - pointerDown * 0.05,\n      );\n      sphere(size * 0.7023682612074287 - pointerDown * 0.05 / 2);\n\n      blend(nsin(time * size) * 0.11435451161014794);\n\n      sphere(size / 3);\n    ",
+      "outputs": [
+        {
+          "ceiling": 32,
+          "sha256": "2740426fe74a2fc811f89f40e1d2906f81cf6786ba202beb46c3844dc16b2470"
+        },
+        {
+          "ceiling": 96,
+          "sha256": "498c17f0d5cf6dac3b70e9c6f026492e7e9fb864bcf98140dbfeb462f5a7153c"
+        },
+        {
+          "ceiling": 200,
+          "sha256": "498c17f0d5cf6dac3b70e9c6f026492e7e9fb864bcf98140dbfeb462f5a7153c"
+        }
+      ]
+    },
+    {
+      "sceneId": "template:embedded-scene-6@1",
+      "source": "\n      setMaxIterations(198);\n      setStepSize(0.8838993805155669);\n\n      let size = input();\n      let pointerDown = input();\n      time *= .1;\n      rotateY(mouse.x * -5 * PI / 2 + time - (pointerDown + 0.1));\n      rotateX(mouse.y * 5 * PI / 2 + time);\n\n      color(0.9514769334666449, 0.1077350724621205, 0);\n\n      rotateX(getRayDirection().y * 2.1969051528600634 + time);\n      rotateY(getRayDirection().x * 2.1969051528600634 + time);\n      rotateZ(getRayDirection().z * 2.1969051528600634 + time);\n\n      metal(0.7125574975041655 * size);\n      shine(0.5774589834819871);\n\n      sphere(size * 0.9935175302558173 - pointerDown * 0.05 / 2);\n      cylinder(\n        size * 0.9289837692896183 - pointerDown * 0.05 / 4,\n        size * 0.9289837692896183 - pointerDown * 0.05,\n      );\n      grid(\n        5,\n        size * 0.5167759726831176 - pointerDown * 0.05 / 3,\n        0.01 * size * 0.5167759726831176 - pointerDown * 0.05,\n      );\n\n      blend(nsin(time * size) * 0.22861033952631743);\n\n      grid(2, size * 4, max(0.001, size * 0.003));\n    ",
+      "outputs": [
+        {
+          "ceiling": 32,
+          "sha256": "14dba1ad1d078d3d8b9eb3ef4d171332dc097b9a01623456ad02a420d5892a68"
+        },
+        {
+          "ceiling": 96,
+          "sha256": "272209848f95f044f336094a42f2998bb2d3d16181497be82055b37de67bd2be"
+        },
+        {
+          "ceiling": 200,
+          "sha256": "f877a64ed92be54947ea46d6316a7eeb68af529b09b3322c43737677e7c07270"
+        }
+      ]
+    },
+    {
+      "sceneId": "template:embedded-scene-7@1",
+      "source": "\n      setMaxIterations(193);\n      setStepSize(0.7999169963821687);\n\n      let size = input();\n      let pointerDown = input();\n      time *= .1;\n      rotateY(mouse.x * -5 * PI / 2 + time - (pointerDown + 0.1));\n      rotateX(mouse.y * 5 * PI / 2 + time);\n\n      color(0.11460860093209857, 0.007694076675091144, 0.4671766017485241);\n\n      rotateX(getRayDirection().y * 2.0857194147559914 + time);\n      rotateY(getRayDirection().x * 2.0857194147559914 + time);\n      rotateZ(getRayDirection().z * 2.0857194147559914 + time);\n\n      metal(0.5711799571404537 * size);\n      shine(0.5590513531439385);\n\n      grid(\n        5,\n        size * 0.7173114499365616 - pointerDown * 0.05 / 3,\n        0.01 * size * 0.7173114499365616 - pointerDown * 0.05,\n      );\n      grid(\n        4,\n        size * 0.6514999435141519 - pointerDown * 0.05 / 3,\n        0.01 * size * 0.6514999435141519 - pointerDown * 0.05,\n      );\n      sphere(size * 0.7684034276974527 - pointerDown * 0.05 / 2);\n\n      blend(nsin(time * size) * 0.1017060511129565);\n\n      sphere(size / 3);\n    ",
+      "outputs": [
+        {
+          "ceiling": 32,
+          "sha256": "7d95c357b9355625b3017ccc6dd3fa438c29f7299174fd5295d23acca9eaf109"
+        },
+        {
+          "ceiling": 96,
+          "sha256": "87c9f1f9f14371b78dc9a9784ffcce2699226cf65595ceffb5a4324feb41f724"
+        },
+        {
+          "ceiling": 200,
+          "sha256": "9056ec4f8c7c22fe634925c3c3c368a8e230f597c53299fa24dd4e4022c5243a"
+        }
+      ]
+    },
+    {
+      "sceneId": "template:embedded-scene-8@1",
+      "source": "\n      setMaxIterations(186);\n      setStepSize(0.8615043142034936);\n\n      let size = input();\n      let pointerDown = input();\n      time *= .1;\n      rotateY(mouse.x * -5 * PI / 2 + time - (pointerDown + 0.1));\n      rotateX(mouse.y * 5 * PI / 2 + time);\n\n      color(0.4050203196259186, 0.7752881097617492, 0.451950921258232);\n\n      rotateX(getRayDirection().y * 1.4049960809220177 + time);\n      rotateY(getRayDirection().x * 1.4049960809220177 + time);\n      rotateZ(getRayDirection().z * 1.4049960809220177 + time);\n\n      metal(0.6607251320316083 * size);\n      shine(0.6646852498948923);\n\n      torus(\n        size * 0.7885283144721178 - pointerDown * 0.05,\n        size * 0.7885283144721178 - pointerDown * 0.05 / 4,\n      );\n      grid(\n        3,\n        size * 0.5103440758834754 - pointerDown * 0.05 / 3,\n        0.01 * size * 0.5103440758834754 - pointerDown * 0.05,\n      );\n      boxFrame(\n        vec3(size * 0.57344769639438 - pointerDown * 0.05),\n        size * 0.57344769639438 - pointerDown * 0.05 * 0.1,\n      );\n      grid(\n        3,\n        size * 0.5749414312428847 - pointerDown * 0.05 / 3,\n        0.01 * size * 0.5749414312428847 - pointerDown * 0.05,\n      );\n      sphere(size * 0.6151950610078535 - pointerDown * 0.05 / 2);\n\n      blend(nsin(time * size) * 0.19517422836065718);\n\n      grid(1, size * 4, max(0.001, size * 0.003));\n    ",
+      "outputs": [
+        {
+          "ceiling": 32,
+          "sha256": "7da2da01e07c10a53591aa8ef8c51b0cc9236e23729aa5025f2ab0a869b84b79"
+        },
+        {
+          "ceiling": 96,
+          "sha256": "e1fad2d6daac64d7d738489aca59674d4cd341da304a45cdb171949813235de3"
+        },
+        {
+          "ceiling": 200,
+          "sha256": "5c2d378ecd86f59f27a6a2c5fce8c225c8ac88413e90e0f18e90d9065cf53e1a"
+        }
+      ]
+    },
+    {
+      "sceneId": "template:embedded-scene-9@1",
+      "source": "\n      setMaxIterations(56);\n      setStepSize(0.7549446257595138);\n\n      let size = input();\n      let pointerDown = input();\n      time *= .1;\n      rotateY(mouse.x * -5 * PI / 2 + time - (pointerDown + 0.1));\n      rotateX(mouse.y * 5 * PI / 2 + time);\n\n      color(0.9995767105459568, 0.3013572617092242, 0);\n\n      rotateX(getRayDirection().y * 2.7452866417099218 + time);\n      rotateY(getRayDirection().x * 2.7452866417099218 + time);\n      rotateZ(getRayDirection().z * 2.7452866417099218 + time);\n\n      metal(0.4757753414424941 * size);\n      shine(0.4905478148343774);\n\n      boxFrame(\n        vec3(size * 0.7439170606081622 - pointerDown * 0.05),\n        size * 0.7439170606081622 - pointerDown * 0.05 * 0.1,\n      );\n      grid(\n        3,\n        size * 0.508466039994321 - pointerDown * 0.05 / 3,\n        0.01 * size * 0.508466039994321 - pointerDown * 0.05,\n      );\n\n      blend(nsin(time * size) * 0.10155951925016898);\n\n      sphere(size / 3);\n    ",
+      "outputs": [
+        {
+          "ceiling": 32,
+          "sha256": "0d9eceb78191eb7f93959944635561ed23a9838ba4bf6eb92df829e3126cba9b"
+        },
+        {
+          "ceiling": 96,
+          "sha256": "93c07a9cd4636adff8856c54b1ad2d6ac610883512db0d8198747650eac63554"
+        },
+        {
+          "ceiling": 200,
+          "sha256": "93c07a9cd4636adff8856c54b1ad2d6ac610883512db0d8198747650eac63554"
+        }
+      ]
+    },
+    {
+      "sceneId": "template:embedded-scene-10@1",
+      "source": "\n      setMaxIterations(151);\n      setStepSize(0.26597607104610804);\n\n      let size = input();\n      let pointerDown = input();\n      time *= .1;\n      rotateY(mouse.x * -5 * PI / 2 + time - (pointerDown + 0.1));\n      rotateX(mouse.y * 5 * PI / 2 + time);\n\n      color(0.19651749597261697, 0.914203219207783, 0.24550611194053884);\n\n      rotateX(getRayDirection().y * 1.9938824658616179 + time);\n      rotateY(getRayDirection().x * 1.9938824658616179 + time);\n      rotateZ(getRayDirection().z * 1.9938824658616179 + time);\n\n      metal(0.31594207653292694 * size);\n      shine(0.3832572948846391);\n\n      torus(\n        size * 0.8810248079142805 - pointerDown * 0.05,\n        size * 0.8810248079142805 - pointerDown * 0.05 / 4,\n      );\n      boxFrame(\n        vec3(size * 0.8855044665503 - pointerDown * 0.05),\n        size * 0.8855044665503 - pointerDown * 0.05 * 0.1,\n      );\n\n      blend(nsin(time * size) * 0.11214341939632295);\n\n      grid(1, size * 4, max(0.001, size * 0.003));\n    ",
+      "outputs": [
+        {
+          "ceiling": 32,
+          "sha256": "c93cb9a74773d7b9e12d2afa601b4912dd3b840f1b724f84084205ad4e990d84"
+        },
+        {
+          "ceiling": 96,
+          "sha256": "f4756751e99f5d0b8cf46622e63cd0ddd3309ee341364229eb9efc1435ccba3f"
+        },
+        {
+          "ceiling": 200,
+          "sha256": "3407b2c5753b73d5f60c6d44850aa2d5da5a017ba9691aa7ea32ff7f0119ed39"
+        }
+      ]
+    },
+    {
+      "sceneId": "template:embedded-scene-11@1",
+      "source": "\n      setMaxIterations(96);\n      setStepSize(0.8497186712056144);\n\n      let size = input();\n      let pointerDown = input();\n      time *= 0.663750656570544;\n\n      color(getRayDirection().x, getRayDirection().y, getRayDirection().z);\n\n      let s = getSpace();\n\n      cylinder(\n        size * 0.6168195561594768 - pointerDown * 0.05 / 4,\n        size * 0.6168195561594768 - pointerDown * 0.05,\n      );\n      expand(noise(s * 0.7369379972723424) * 0.2843224929727242);\n      torus(\n        size * 0.8334445133920002 - pointerDown * 0.05,\n        size * 0.8334445133920002 - pointerDown * 0.05 / 4,\n      );\n      grid(\n        3,\n        size * 0.9954834969507702 - pointerDown * 0.05 / 3,\n        0.01 * size * 0.9954834969507702 - pointerDown * 0.05,\n      );\n\n      blend(nsin(time * size) * 0.1250996138241836);\n    ",
+      "outputs": [
+        {
+          "ceiling": 32,
+          "sha256": "964582a35cac53ca82d20590170b43268370b4c5a9154cd9e00d88225ffe6f5e"
+        },
+        {
+          "ceiling": 96,
+          "sha256": "7d1908c0f980e0395b44a1a414b4e8a82af2b7c1aab128a50614e728cfc716fb"
+        },
+        {
+          "ceiling": 200,
+          "sha256": "7d1908c0f980e0395b44a1a414b4e8a82af2b7c1aab128a50614e728cfc716fb"
+        }
+      ]
+    },
+    {
+      "sceneId": "template:embedded-scene-12@1",
+      "source": "\n      setMaxIterations(78);\n      setStepSize(0.7369359368566446);\n\n      let size = input();\n      let pointerDown = input();\n      time *= 0.9539348297232683;\n\n      rotateX(getRayDirection().y * 2.4510099887638064 + time * 2.4510099887638064);\n      rotateZ(getRayDirection().z * 1.329787985176121 + time * 1.329787985176121);\n\n      color(getRayDirection().x, getRayDirection().y, getRayDirection().z);\n\n      let s = getSpace();\n\n      expand(noise(s * 0.9106972929083885) * 0.3894969217119301);\n      sphere(size * 0.6061774521306397 - pointerDown * 0.05 / 2);\n      expand(noise(s * 1.9603753411504794) * 0.38739515373281597);\n      torus(\n        size * 0.5957939662981329 - pointerDown * 0.05,\n        size * 0.5957939662981329 - pointerDown * 0.05 / 4,\n      );\n      cylinder(\n        size * 0.7847176552581908 - pointerDown * 0.05 / 4,\n        size * 0.7847176552581908 - pointerDown * 0.05,\n      );\n      expand(noise(s * 0.5620060333649501) * 0.4766355635901381);\n      grid(\n        5,\n        size * 0.6803317673052074 - pointerDown * 0.05 / 3,\n        0.01 * size * 0.6803317673052074 - pointerDown * 0.05,\n      );\n      expand(noise(s * 1.6366720215270216) * 0.40304648326346637);\n      boxFrame(\n        vec3(size * 0.8080101969375488 - pointerDown * 0.05),\n        size * 0.8080101969375488 - pointerDown * 0.05 * 0.1,\n      );\n\n      blend(nsin(time * size) * 0.20502448998246994);\n    ",
+      "outputs": [
+        {
+          "ceiling": 32,
+          "sha256": "7a43c634dd281520da435e8e54c9320121fb7ba00076dc54ef5d144520ff731f"
+        },
+        {
+          "ceiling": 96,
+          "sha256": "4ae94d971a28b5a27e803f9a7b20427f26da1dfdd07424ee26d6e2a105923015"
+        },
+        {
+          "ceiling": 200,
+          "sha256": "4ae94d971a28b5a27e803f9a7b20427f26da1dfdd07424ee26d6e2a105923015"
+        }
+      ]
+    },
+    {
+      "sceneId": "template:embedded-scene-13@1",
+      "source": "\n      setGeometryQuality(24);\n      setStepSize(0.7838);\n      setMaxIterations(48);\n      let size = input();\n      let pointerDown = input();\n      let mx = mouse.x;\n      let my = mouse.y;\n      let rayDir = normalize(getRayDirection());\n      let t = time * 0.226 +1.5716;\n      let baseSize = max(0.2708, 0.3225 + size * 1.2464 + pointerDown * 0.0867);\n      reset();\n      rotateY(rayDir.x * 0.8003 + mx * 0.83 + sin(t * 1.0544) * 0.0592);\n      rotateX(rayDir.y * 1.3923 + my * 2.2418 + cos(t * 1.5395) * 0.0513);\n      rotateZ(rayDir.z * 0.9036 + sin(t * 0.3942 + 2.9702) * 0.1384);\n      rotateX(1.1899 + sin(t * 1.8883 + 5.4271) * 0.0054);\n      rotateY(1.364 + cos(t * 1.8883 + 5.4271) * 0.0054);\n      rotateZ(-0.2239 + nsin(t * 1.8883 + 5.4271) * 0.0054);\n      let s0 = getSpace();\n      expand(noise(s0 * 2.0455) * 0.0094 + nsin(t * 1.9359 + 2.4569) * 0.0046);\n      color(min(1.0, max(0.0, 0.745 + rayDir.x * 0.3719 + sin(t * 0.8768 + 0) * 0.305)), min(1.0, max(0.0, 0.2488 + rayDir.y * 0.3719 + cos(t * 0.5164 + 0) * 0.2285)), min(1.0, max(0.0, 0.6122 + rayDir.z * 0.3719 + nsin(t * 1.553 + 0) * 0.273)));\n      metal(max(0.0, min(1.0, 0.6355 + pointerDown * 0.12)));\n      shine(max(0.0, min(1.0, 0.4079 + size * 0.05)));\n      torus(max(0.1314, baseSize * 0.6537 + pointerDown * 0.1257 + sin(t * 1.8883 + 2.4569) * 0.0108), max(0.0807, max(0.1314, baseSize * 0.6537 + pointerDown * 0.1257 + sin(t * 1.8883 + 2.4569) * 0.0108) * 0.1909));\n      blend(max(0.02, min(0.45, 0.1098 + nsin(t * 0.6211 + 0.5089) * 0.0234)));\n      reset();\n      rotateY(rayDir.x * 0.8003 + mx * 0.83 + sin(t * 1.0544) * 0.0592);\n      rotateX(rayDir.y * 1.3923 + my * 2.2418 + cos(t * 1.5395) * 0.0513);\n      rotateZ(rayDir.z * 0.9036 + sin(t * 0.3942 + 2.9702) * 0.1384);\n      rotateX(0.8582 + sin(t * 1.0024 + 9.101) * 0.0042);\n      rotateY(1.4936 + cos(t * 1.0024 + 9.101) * 0.0042);\n      rotateZ(1.5492 + nsin(t * 1.0024 + 9.101) * 0.0042);\n      let s1 = getSpace();\n      expand(noise(s1 * 2.6572) * 0.0002 + nsin(t * 1.6689 + 6.1307) * 0.0059);\n      color(min(1.0, max(0.0, 0.745 + rayDir.x * 0.3719 + sin(t * 0.8768 + 0.0589) * 0.305)), min(1.0, max(0.0, 0.2488 + rayDir.y * 0.3719 + cos(t * 0.5164 + 0.0589) * 0.2285)), min(1.0, max(0.0, 0.6122 + rayDir.z * 0.3719 + nsin(t * 1.553 + 0.0589) * 0.273)));\n      metal(max(0.0, min(1.0, 0.6355 + pointerDown * 0.12)));\n      shine(max(0.0, min(1.0, 0.4079 + size * 0.05)));\n      torus(max(0.1324, baseSize * 0.6252 + pointerDown * 0.1172 + sin(t * 1.0024 + 6.1307) * 0.0083), max(0.041, max(0.1324, baseSize * 0.6252 + pointerDown * 0.1172 + sin(t * 1.0024 + 6.1307) * 0.0083) * 0.1639));\n      blend(max(0.02, min(0.45, 0.1098 + nsin(t * 0.6211 + 1.0179) * 0.0234)));\n      reset();\n      rotateY(rayDir.x * 0.8003 + mx * 0.83 + sin(t * 1.0544) * 0.0592);\n      rotateX(rayDir.y * 1.3923 + my * 2.2418 + cos(t * 1.5395) * 0.0513);\n      rotateZ(rayDir.z * 0.9036 + sin(t * 0.3942 + 2.9702) * 0.1384);\n      rotateX(-1.0307 + sin(t * 0.5909 + 5.4207) * 0.0041);\n      rotateY(0.8766 + cos(t * 0.5909 + 5.4207) * 0.0041);\n      rotateZ(-0.0164 + nsin(t * 0.5909 + 5.4207) * 0.0041);\n      let s2 = getSpace();\n      expand(noise(s2 * 1.0838) * 0.01 + nsin(t * 2.1073 + 2.4505) * 0.0003);\n      color(min(1.0, max(0.0, 0.745 + rayDir.x * 0.3719 + sin(t * 0.8768 + 0.1178) * 0.305)), min(1.0, max(0.0, 0.2488 + rayDir.y * 0.3719 + cos(t * 0.5164 + 0.1178) * 0.2285)), min(1.0, max(0.0, 0.6122 + rayDir.z * 0.3719 + nsin(t * 1.553 + 0.1178) * 0.273)));\n      metal(max(0.0, min(1.0, 0.6355 + pointerDown * 0.12)));\n      shine(max(0.0, min(1.0, 0.4079 + size * 0.05)));\n      cylinder(max(0.1318, max(0.0904, baseSize * 0.1671 + pointerDown * 0.1318 + sin(t * 0.5909 + 2.4505) * 0.0081) * 0.2033), max(0.0904, max(0.0904, baseSize * 0.1671 + pointerDown * 0.1318 + sin(t * 0.5909 + 2.4505) * 0.0081) * 1.7875));\n    ",
+      "outputs": [
+        {
+          "ceiling": 32,
+          "sha256": "b51daf29982cdc5f85a6208db722ed061176217855b840441c3f9bb5e1016b48"
+        },
+        {
+          "ceiling": 96,
+          "sha256": "7bca909a5073c4e81be5e17c60ca69afcb3f326973d0394394cea591732a806c"
+        },
+        {
+          "ceiling": 200,
+          "sha256": "7bca909a5073c4e81be5e17c60ca69afcb3f326973d0394394cea591732a806c"
+        }
+      ]
+    },
+    {
+      "sceneId": "template:reaction-rings-v1@1",
+      "source": "setMaxIterations(100); setStepSize(0.65);\nlet size = input(); let pointerDown = input();\nlet reactionAudio = max(size, 0) * 3;\nlet reactionEnvelope = reactionAudio / (1 + reactionAudio * 0.65);\nlet reactionPulse = reactionEnvelope * 1;\nlet reactionDeformation = reactionEnvelope * 1;\nlet reactionTime = time * 0.4;\nlet reactionScale = (1 + sin(reactionTime * 0.8) * 0.025) * (1 + reactionPulse * 0.2);\nnoLighting();\n\nreset(); union(); rotateY(mouse.x * 0.2); rotateX(PI / 2 + mouse.y * 0.15);\nlet ringSpace0 = getSpace();\nlet ringAngle0 = atan(ringSpace0.z, ringSpace0.x + 0.00001);\nlet ringWave0 = sin(ringAngle0 * 3 + reactionTime * 0.45 + 0) * 0.65\n  + sin(ringAngle0 * 5 - reactionTime * 0.3) * 0.35;\ncolor(0.48, 0.26, 0.95);\ntorus((0.135 + ringWave0 * (0.0018 + reactionDeformation * 0.032 + pointerDown * 0.003)) * reactionScale, 0.0038 * reactionScale);\n\nreset(); union(); rotateY(mouse.x * 0.2); rotateX(PI / 2 + mouse.y * 0.15);\nlet ringSpace1 = getSpace();\nlet ringAngle1 = atan(ringSpace1.z, ringSpace1.x + 0.00001);\nlet ringWave1 = sin(ringAngle1 * 4 + reactionTime * 0.45 + 1.7) * 0.65\n  + sin(ringAngle1 * 6 - reactionTime * 0.3) * 0.35;\ncolor(0.08, 0.65, 0.58);\ntorus((0.093 + ringWave1 * (0.0013 + reactionDeformation * 0.021 + pointerDown * 0.003)) * reactionScale, 0.0034 * reactionScale);\n\nreset(); union(); rotateY(mouse.x * 0.2); rotateX(PI / 2 + mouse.y * 0.15);\nlet ringSpace2 = getSpace();\nlet ringAngle2 = atan(ringSpace2.z, ringSpace2.x + 0.00001);\nlet ringWave2 = sin(ringAngle2 * 2 + reactionTime * 0.45 + 3.4) * 0.65\n  + sin(ringAngle2 * 4 - reactionTime * 0.3) * 0.35;\ncolor(0.95, 0.3, 0.5);\ntorus((0.055 + ringWave2 * (0.0009 + reactionDeformation * 0.012 + pointerDown * 0.003)) * reactionScale, 0.003 * reactionScale);\n\nreset(); union(); color(0.65, 0.48, 1);\nsphere(0.018 * reactionScale);\n",
+      "outputs": [
+        {
+          "ceiling": 32,
+          "sha256": "d7bcb18c90a918f19ce6e80b0087a818af2c237a4895a520179a0b181486bea8"
+        },
+        {
+          "ceiling": 96,
+          "sha256": "51164bf17b4c0175da9b63a383be8d564fb26099faae1fd54bd6898d45fc922b"
+        },
+        {
+          "ceiling": 200,
+          "sha256": "b765cc69c5f544a7bbed264e727a1ad5b09c051138817812b0d014d12f97634f"
+        }
+      ]
+    },
+    {
+      "sceneId": "template:reaction-lantern-v1@1",
+      "source": "setMaxIterations(100); setStepSize(0.65);\nlet size = input(); let pointerDown = input();\nlet reactionAudio = max(size, 0) * 3;\nlet reactionEnvelope = reactionAudio / (1 + reactionAudio * 0.65);\nlet reactionPulse = reactionEnvelope * 1;\nlet reactionDeformation = reactionEnvelope * 1;\nlet reactionTime = time * 0.4;\nlet reactionScale = (1 + sin(reactionTime * 0.8) * 0.025) * (1 + reactionPulse * 0.2);\nmetal(0.25); shine(0.6);\nreset(); rotateY(mouse.x * 0.3 + sin(reactionTime * 0.3) * 0.08); rotateX(mouse.y * 0.18);\nlet lanternSpace = getSpace(); setSpace(lanternSpace.x / reactionScale, lanternSpace.y / reactionScale, lanternSpace.z / reactionScale);\ndisplace(0, 0.06, 0);\nlet shellSpace = getSpace();\nlet shellAngle = atan(shellSpace.z, shellSpace.x + 0.00001);\nlet shellRipple = sin(shellAngle * 6 + shellSpace.y * 24 - reactionTime * 0.7);\nlet shellWarp = 0.018 + reactionDeformation * 0.16 + pointerDown * 0.06;\nsetSpace(shellSpace.x * (1 + shellRipple * shellWarp), shellSpace.y * 1.55, shellSpace.z * (1 + shellRipple * shellWarp));\ncolor(0.18 + nsin(shellAngle * 2 + reactionTime * 0.4) * 0.45, 0.36, 0.85);\nsphere(0.092);\ndifference(); displace(0, -0.11, 0); box(vec3(0.2, 0.11, 0.2));\n\nreset(); union(); rotateY(mouse.x * 0.3 + sin(reactionTime * 0.3) * 0.08); rotateX(mouse.y * 0.18);\nlet strandScale0 = getSpace(); setSpace(strandScale0.x / reactionScale, strandScale0.y / reactionScale, strandScale0.z / reactionScale);\ndisplace(0.052, -0.035, 0);\nlet strandSpace0 = getSpace();\nlet strandWave0 = 0.004 + reactionDeformation * 0.009 + pointerDown * 0.003;\nsetSpace(strandSpace0.x + sin(strandSpace0.y * 35 + reactionTime * 0.8 + 0) * strandWave0, strandSpace0.y, strandSpace0.z + cos(strandSpace0.y * 29 - reactionTime * 0.65 + 0) * strandWave0);\ncolor(0.72, 0.22, 0.85);\ncylinder(0.0028, 0.058);\n\nreset(); union(); rotateY(mouse.x * 0.3 + sin(reactionTime * 0.3) * 0.08); rotateX(mouse.y * 0.18);\nlet strandScale1 = getSpace(); setSpace(strandScale1.x / reactionScale, strandScale1.y / reactionScale, strandScale1.z / reactionScale);\ndisplace(0.026, -0.035, 0.045033);\nlet strandSpace1 = getSpace();\nlet strandWave1 = 0.004 + reactionDeformation * 0.009 + pointerDown * 0.003;\nsetSpace(strandSpace1.x + sin(strandSpace1.y * 35 + reactionTime * 0.8 + 1) * strandWave1, strandSpace1.y, strandSpace1.z + cos(strandSpace1.y * 29 - reactionTime * 0.65 + 1) * strandWave1);\ncolor(0.16, 0.7, 0.64);\ncylinder(0.0028, 0.07);\n\nreset(); union(); rotateY(mouse.x * 0.3 + sin(reactionTime * 0.3) * 0.08); rotateX(mouse.y * 0.18);\nlet strandScale2 = getSpace(); setSpace(strandScale2.x / reactionScale, strandScale2.y / reactionScale, strandScale2.z / reactionScale);\ndisplace(-0.026, -0.035, 0.045033);\nlet strandSpace2 = getSpace();\nlet strandWave2 = 0.004 + reactionDeformation * 0.009 + pointerDown * 0.003;\nsetSpace(strandSpace2.x + sin(strandSpace2.y * 35 + reactionTime * 0.8 + 2) * strandWave2, strandSpace2.y, strandSpace2.z + cos(strandSpace2.y * 29 - reactionTime * 0.65 + 2) * strandWave2);\ncolor(0.72, 0.22, 0.85);\ncylinder(0.0028, 0.082);\n\nreset(); union(); rotateY(mouse.x * 0.3 + sin(reactionTime * 0.3) * 0.08); rotateX(mouse.y * 0.18);\nlet strandScale3 = getSpace(); setSpace(strandScale3.x / reactionScale, strandScale3.y / reactionScale, strandScale3.z / reactionScale);\ndisplace(-0.052, -0.035, 0);\nlet strandSpace3 = getSpace();\nlet strandWave3 = 0.004 + reactionDeformation * 0.009 + pointerDown * 0.003;\nsetSpace(strandSpace3.x + sin(strandSpace3.y * 35 + reactionTime * 0.8 + 3) * strandWave3, strandSpace3.y, strandSpace3.z + cos(strandSpace3.y * 29 - reactionTime * 0.65 + 3) * strandWave3);\ncolor(0.16, 0.7, 0.64);\ncylinder(0.0028, 0.058);\n\nreset(); union(); rotateY(mouse.x * 0.3 + sin(reactionTime * 0.3) * 0.08); rotateX(mouse.y * 0.18);\nlet strandScale4 = getSpace(); setSpace(strandScale4.x / reactionScale, strandScale4.y / reactionScale, strandScale4.z / reactionScale);\ndisplace(-0.026, -0.035, -0.045033);\nlet strandSpace4 = getSpace();\nlet strandWave4 = 0.004 + reactionDeformation * 0.009 + pointerDown * 0.003;\nsetSpace(strandSpace4.x + sin(strandSpace4.y * 35 + reactionTime * 0.8 + 4) * strandWave4, strandSpace4.y, strandSpace4.z + cos(strandSpace4.y * 29 - reactionTime * 0.65 + 4) * strandWave4);\ncolor(0.72, 0.22, 0.85);\ncylinder(0.0028, 0.07);\n\nreset(); union(); rotateY(mouse.x * 0.3 + sin(reactionTime * 0.3) * 0.08); rotateX(mouse.y * 0.18);\nlet strandScale5 = getSpace(); setSpace(strandScale5.x / reactionScale, strandScale5.y / reactionScale, strandScale5.z / reactionScale);\ndisplace(0.026, -0.035, -0.045033);\nlet strandSpace5 = getSpace();\nlet strandWave5 = 0.004 + reactionDeformation * 0.009 + pointerDown * 0.003;\nsetSpace(strandSpace5.x + sin(strandSpace5.y * 35 + reactionTime * 0.8 + 5) * strandWave5, strandSpace5.y, strandSpace5.z + cos(strandSpace5.y * 29 - reactionTime * 0.65 + 5) * strandWave5);\ncolor(0.16, 0.7, 0.64);\ncylinder(0.0028, 0.082);\n",
+      "outputs": [
+        {
+          "ceiling": 32,
+          "sha256": "46096b621f73bd4d288531c7f947dcb03571ec1d331e1969ac5184c82e604fc7"
+        },
+        {
+          "ceiling": 96,
+          "sha256": "abf4d5ab62dc819db288f24bad6429c11849966ec7c880c2cf09810595694315"
+        },
+        {
+          "ceiling": 200,
+          "sha256": "eff25b76d18d45947cad988e10acaf77b319db9e9e9f8894f639a465c2d2bad6"
+        }
+      ]
+    }
+  ]
+}
