@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "declaration": true,
+    "emitDeclarationOnly": false,
+    "rootDir": "./js",
+    "outDir": "dist",
+    "moduleResolution": "bundler",
+    "target": "ESNext",
+    "skipLibCheck": true
+  },
+  "include": ["./js/mage-lib.js"],
+  "exclude": ["node_modules", "dist", "scripts", "src"]
+}

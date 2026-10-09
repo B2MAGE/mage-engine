@@ -1,4 +1,9 @@
 node_modules/
+.local/
+*.tgz
+js/compiled-shader-shell.generated.js
 dist/
 .DS_Store
 *.log
+./js/presets.js
+./js/skyboxes.js
