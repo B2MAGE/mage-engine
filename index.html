@@ -14,7 +14,7 @@ body {
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(320px, 420px) 1fr;
+  grid-template-columns: minmax(600px, 800px) 1fr;
   gap: 16px;
   padding: 16px;
 }
@@ -82,13 +82,43 @@ textarea {
   max-height: 220px;
 }
 
+#savedPresetGallery {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+  margin-top: 8px;
+}
+
+.savedPresetCard {
+  border: 1px solid #333b4f;
+  border-radius: 8px;
+  background: #10131b;
+  padding: 8px;
+}
+
+.savedPresetCard img {
+  width: 100%;
+  max-height: 120px;
+  object-fit: contain;
+  border-radius: 6px;
+  border: 1px solid #3b4257;
+  background: #080b10;
+  margin-top: 6px;
+}
+
+.savedPresetMeta {
+  font-size: 11px;
+  opacity: 0.9;
+}
+
 #mageWrap {
   display: grid;
   place-items: center;
 }
 
 #mage {
-  width: min(800px, 92vw);
+  width: min(1200px, 92vw);
   aspect-ratio: 1 / 1;
   background: #000;
   border-radius: 12px;
@@ -121,6 +151,13 @@ textarea {
           <button id="btnStart">start()</button>
           <button id="btnPlay">play()</button>
           <button id="btnPause">pause()</button>
+          <button id="btnFullscreen">toggleFullscreen()</button>
+          <button id="btnTestDock">Create audio test dock</button>
+          <button id="initControls">Initialize tweakpane controls</button>
+          <button id="takeSnapshot">Take snapshot (thumbnail)</button>
+          <button id="presetToThumbnail">to Preset thumbnail</button>
+          <button id="testPreview">Test preview mode</button>
+          <button id="openPresetDock">Open preset dock</button>
         </div>
       </div>
 
@@ -143,12 +180,18 @@ textarea {
       </div>
 
       <div class="group">
+        <strong>Saved toPresets (session)</strong>
+        <div id="savedPresetGallery"></div>
+      </div>
+
+      <div class="group">
         <strong>Quick Preset Builder</strong>
         <input id="presetId" type="number" min="0" value="0" placeholder="Preset ID" />
         <textarea id="shaderCode" placeholder="Optional shader code (leave blank for current/default)"></textarea>
         <div class="row">
           <button id="btnApplyQuickPreset">Apply preset skybox</button>
           <button id="btnFillSample">Fill sample JSON</button>
+          <button id="btnShowCurrentShader">Show current shader</button>
         </div>
       </div>
 
@@ -166,29 +209,254 @@ textarea {
   <input type="file" id="file" style="display:none;" />
 
   <script type="module">
-    import { initMAGE } from "./mage-engine.mjs";
+    import { initMAGE, previewMAGE } from "./js/mage-lib.js";
     window.addEventListener('load', () => {
-      
         const logEl = document.getElementById('log');
         const log = message => {
         const line = `[${new Date().toLocaleTimeString()}] ${message}`;
         logEl.value = `${line}\n${logEl.value}`;
         };
 
+        const savedPresetGallery = document.getElementById('savedPresetGallery');
+        const renderSavedPresetGallery = () => {
+          // const presets = typeof engine.getSavedPresets === 'function' ? engine.getSavedPresets() : [];
+          // if (!Array.isArray(presets) || presets.length === 0) {
+          //   savedPresetGallery.innerHTML = '<div class="savedPresetCard"><div class="savedPresetMeta">No presets created yet.</div></div>';
+          //   return;
+          // }
+
+          // savedPresetGallery.innerHTML = presets
+          //   .map((preset, index) => {
+          //     const when = preset._savedAt ? new Date(preset._savedAt).toLocaleTimeString() : 'unknown';
+          //     const thumb = typeof preset.thumbnailDataUrl === 'string' ? `<img src="${preset.thumbnailDataUrl}" alt="Preset ${index + 1} thumbnail" />` : '';
+          //     return `
+          //       <article class="savedPresetCard">
+          //         <div class="savedPresetMeta">Preset ${index + 1} • ${when}</div>
+          //         ${thumb}
+          //       </article>
+          //     `;
+          //   })
+          //   .join('');
+        };
+
         const container = document.getElementById('mage');
         const canvas = document.createElement('canvas');
         container.appendChild(canvas);
 
-        const { engine } = initMAGE({
-            canvas,
-            withControls: true,
-            autoStart: true,
-            assetBaseUrl: './resources/',
+        const engine = initMAGE({
+          canvas,
+          log: true,
+          autoStart: false,
+          withControls: { active: false, integrated: true },
         });
+
+        window.MAGE = engine; // Expose engine for debugging
+
+        // document.getElementById('testFx').addEventListener('click', () => {
+        //   const controls = engine.fx;  
+        //   if (controls) {
+        //         controls.setBloomEnabled(true);
+        //         const bloomIntensity = controls.getBloomStrength();
+        //         log(`getFxControls() test: Bloom intensity is ${bloomIntensity}`);
+        //     } else {
+        //         log('getFxControls() not available');
+        //     }
+        // });
 
         document.getElementById('btnStart').addEventListener('click', () => {
         engine.start();
         log('start() called');
+        });
+
+        const defaultPreset = {
+
+            "0": {
+    "version": "1.1.0",
+    "visualizer": {
+      "shader": "\n      let size = input()\n      let pointerDown = input()\n      time = .3*time\n\t  size *= 1.3\n      rotateY(mouse.x * -2 * PI / 2 * (1+nsin(time)))\n      rotateX(mouse.y * 2 * PI / 2 * (1+nsin(time)))\n      metal(.5*size)\n      let rayDir = normalize(getRayDirection())\n      let clampedColor = vec3(rayDir.x+.2, rayDir.y+.25, rayDir.z+.2)\n      color(clampedColor)\n\n      rotateY(sin(getRayDirection().y*8*(ncos(sin(time)))+size))\n\t  rotateX(cos((getRayDirection().x*16*nsin(time)+size)))\n\t  rotateZ(ncos((getRayDirection().z*4*cos(time)+size)))\n      boxFrame(vec3(size), size*.1)\n      shine(0.8*size)\n      blend(nsin(time*(size))*0.1+0.1)\n      sphere(size/2-pointerDown*.3)\n      blend(ncos((time*(size)))*0.1+0.1)\n      boxFrame(vec3(size-.075*pointerDown), size)\n      ",
+      "skyboxPreset": 6,
+      "scale": 10
+    },
+    "controls": {
+      "target0": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "position0": {
+        "x": -2.317438231901558,
+        "y": 3.3677786976552254e-16,
+        "z": 4.987933443954626
+      },
+      "zoom0": 1
+    },
+    "intent": {
+      "time_multiplier": 1,
+      "minimizing_factor": 0.8,
+      "power_factor": 8,
+      "pointerDownMultiplier": 0,
+      "base_speed": 0.2,
+      "easing_speed": 0.6,
+      "camTilt": 0,
+      "autoRotate": true,
+      "autoRotateSpeed": 0.2,
+      "fov": 75
+    },
+    "fx": {
+      "passOrder": [
+        "glitchPass",
+        "bloom",
+        "RGBShift",
+        "dotShader",
+        "technicolorShader",
+        "luminosityShader",
+        "afterImagePass",
+        "sobelShader",
+        "colorifyShader",
+        "halftonePass",
+        "gammaCorrectionShader",
+        "kaleidoShader",
+        "copyShader",
+        "bleachBypassShader",
+        "toonShader",
+        "outputPass"
+      ],
+      "bloom": {
+        "enabled": false,
+        "strength": 1,
+        "radius": 0.2,
+        "threshold": 0.1
+      },
+      "toneMapping": {
+        "method": 0,
+        "exposure": 1.5
+      },
+      "passes": {
+        "rgbShift": false,
+        "dot": false,
+        "technicolor": false,
+        "luminosity": false,
+        "afterImage": false,
+        "sobel": false,
+        "glitch": false,
+        "colorify": false,
+        "halftone": false,
+        "gammaCorrection": false,
+        "kaleid": false,
+        "outputPass": true
+      },
+      "params": {
+        "rgbShift": {
+          "amount": 0.005,
+          "angle": 0
+        },
+        "afterImage": {
+          "damp": 0.96
+        },
+        "colorify": {
+          "color": 16777215
+        },
+        "kaleid": {
+          "sides": 6,
+          "angle": 0
+        }
+      }
+    },
+    "state": {
+      "time_multiplier": 1,
+      "mouse": {
+        "x": 1.9999999973873561,
+        "y": 1.9999999989951214,
+        "z": 0
+      },
+      "currMouse": {
+        "x": 2,
+        "y": 2,
+        "z": 0
+      },
+      "size": 0.021200710816584048,
+      "pointerDown": 5.152256162949398e-22,
+      "pointerDownMultiplier": 0,
+      "currPointerDown": 0,
+      "currAudio": 0.021203810725643934,
+      "time": 7.70149999999995,
+      "volume_multiplier": 0,
+      "minimizing_factor": 0.8,
+      "power_factor": 8,
+      "base_speed": 0.2,
+      "easing_speed": 0.6,
+      "camTilt": 0
+    }
+  },
+        }
+
+        // creatre preview canvas centered at mouse position, render preset there without starting audio or animation, then destroy canvas on click and log result
+        const previewCanvas = document.createElement('canvas');
+        previewCanvas.style.position = 'fixed';
+        previewCanvas.style.left = '50%';
+        previewCanvas.style.top = '50%';
+        previewCanvas.style.transform = 'translate(-50%, -50%)';
+        document.body.appendChild(previewCanvas);
+
+        let testPreview = null;
+        document.getElementById('testPreview').addEventListener('click', () => {
+            // Example usage - replace with actual preset
+            if (testPreview === null) {
+                testPreview = previewMAGE(previewCanvas, defaultPreset["0"], 240);
+            } else {
+                testPreview.dispose();
+                testPreview = null;
+                document.body.removeChild(previewCanvas);
+                log('Test preview instance destroyed');
+            }
+        });
+
+        document.getElementById('openPresetDock').addEventListener('click', () => {
+            if (typeof engine.openPresetDock === 'function') {
+                engine.openPresetDock();
+                log('openDefaultPresetDock() called');
+            } else {
+                log('openDefaultPresetDock() not available on engine');
+            }
+        });
+
+        document.getElementById('presetToThumbnail').addEventListener('click', () => {
+            if (typeof engine.captureThumbnail === 'function') {
+            const presetForThumbnail = engine.toPreset();
+            engine.captureThumbnail(presetForThumbnail, { quality: 0.9, settleFrames: 5 }).then(dataUrl => {
+                    if (dataUrl) {
+                        const img = new Image();
+                        img.src = dataUrl;
+                        const w = window.open('');
+                        w.document.write(img.outerHTML);
+                    } else {
+                        log('captureThumbnail did not return a valid image');
+                    }
+                }).catch(error => {
+                    log(`captureThumbnail failed: ${error.message}`);
+                });
+            } else {
+                log('captureThumbnail() not available on engine');
+            }
+        });
+
+        document.getElementById('takeSnapshot').addEventListener('click', () => {
+            if (typeof engine.captureFramePreview === 'function') {
+                engine.captureFramePreview({ width: 320, height: 320, quality: 0.9 }).then(dataUrl => {
+                    if (dataUrl) {
+                        const img = new Image();
+                        img.src = dataUrl;
+                        const w = window.open('');
+                        w.document.write(img.outerHTML);
+                    } else {
+                        log('captureFramePreview did not return a valid image');
+                    }
+                }).catch(error => {
+                    log(`captureFramePreview failed: ${error.message}`);
+                });
+            } else {
+                log('captureFramePreview() not available on engine');
+            }
         });
 
         document.getElementById('btnPlay').addEventListener('click', () => {
@@ -199,6 +467,10 @@ textarea {
         document.getElementById('btnPause').addEventListener('click', () => {
         engine.pause();
         log('pause() called');
+        });
+
+        document.getElementById('btnFullscreen').addEventListener('click', () => {
+            engine.toggleFullscreen();
         });
 
         document.getElementById('btnLoadAudioUrl').addEventListener('click', () => {
@@ -227,31 +499,65 @@ textarea {
         }
         });
 
+        document.getElementById('initControls').addEventListener('click', () => {
+            if (typeof engine.initControls === 'function') {
+                engine.initControls();
+                log('initControls() called');
+            } else {
+                log('initControls() not available on engine');
+            }
+        });
+
         document.getElementById('btnExportPreset').addEventListener('click', () => {
-        const preset = engine.toPreset({ includeState: true });
+        const preset = engine.toPreset();
         const json = JSON.stringify(preset, null, 2);
         document.getElementById('presetInput').value = json;
-        log('toPreset({ includeState: true }) called');
+        renderSavedPresetGallery();
+        log('toPreset() called');
         });
 
         document.getElementById('btnApplyQuickPreset').addEventListener('click', () => {
-            const presetId = Number.parseInt(document.getElementById('presetId').value, 10) || 0;
             const shaderText = document.getElementById('shaderCode').value.trim();
-
-            const payload = {
-                visualizer: {
-                skybox: { type: 'preset', presetId },
-                },
-            };
-
-            if (shaderText) {
-                payload.visualizer.shader = shaderText;
-            }
-
-            engine.loadPreset(payload);
+            engine.swapShader(shaderText || undefined);
             log(`Quick preset applied (presetId=${presetId})`);
         });
 
+        document.getElementById('btnFillSample').addEventListener('click', () => {
+            const sampleShader = `
+            let size = input()
+            time = .3*time
+            size *= 1.3
+            rotateY(mouse.x * -2 * PI / 2 * (1+nsin(time)))
+            rotateX(mouse.y * 2 * PI / 2 * (1+nsin(time)))
+            metal(.5*size)
+            let rayDir = normalize(getRayDirection())
+            let clampedColor = vec3(rayDir.x+.2, rayDir.y+.25, rayDir.z+.2)
+            color(clampedColor)
+
+            rotateY(sin(getRayDirection().y*8*(ncos(sin(time)))+size))
+            rotateX(cos((getRayDirection().x*16*nsin(time)+size)))
+            rotateZ(ncos((getRayDirection().z*4*cos(time)+size)))
+            boxFrame(vec3(size), size*.1)
+            shine(0.8*size)
+            blend(nsin(time*(size))*0.1+0.1)
+            sphere(size/2)
+            blend(ncos((time*(size)))*0.1+0.1)
+            boxFrame(vec3(size-.075), size)
+            `;
+            document.getElementById('shaderCode').value = sampleShader.trim();
+         });
+
+         document.getElementById('btnShowCurrentShader').addEventListener('click', () => {
+            const activeShader = engine.getActiveShader();
+            if (activeShader) {
+                const w = window.open('');
+                w.document.write(`<pre>${activeShader.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`);
+            } else {
+                log('No active shader found');
+            }
+         });
+
+        renderSavedPresetGallery();
         log('Engine initialized. API test harness ready.');
     });
   </script>

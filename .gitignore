@@ -2,3 +2,5 @@ node_modules/
 dist/
 .DS_Store
 *.log
+./js/presets.js
+./js/skyboxes.js
