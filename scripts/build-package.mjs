@@ -20,7 +20,13 @@ for (const name of ['threeHeader', 'usePBRHeader', 'useHemisphereLight', 'sculpt
   if (expression?.type !== 'Literal' || typeof expression.value !== 'string') throw new Error(`Non-string scaffold: ${name}`);
   shell[name] = expression.value;
 }
-const shellSource = '// Generated from the pinned ShaderPark dependency by build-package.mjs. Do not edit.\n'
+// Keep the pinned dependency's scaffold, but own the raymarch termination
+// behavior. Its original loop returned an unconfirmed hit on budget exhaustion.
+const raymarch = /float intersect\(vec3 ro, vec3 rd, float stepFraction\) \{[^{}]*\{[^{}]*\}[^{}]*\}/g;
+if ([...shell.sculptureStarterCode.matchAll(raymarch)].length !== 1) throw new Error('Ambiguous raymarch scaffold');
+shell.sculptureStarterCode = shell.sculptureStarterCode.replace(raymarch,
+  (await readFile(resolve(root, 'js/raymarch.glsl'), 'utf8')).trim());
+const shellSource = '// Generated from pinned ShaderPark and source-owned raymarch.glsl by build-package.mjs. Do not edit.\n'
   + `export const COMPILED_SHADER_SHELL = Object.freeze(${JSON.stringify(shell, null, 2)});\n`;
 await writeFile(resolve(root, 'js/compiled-shader-shell.generated.js'), shellSource);
 
