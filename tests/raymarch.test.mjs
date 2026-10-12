@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Script } from 'node:vm';
+import { readFile } from 'node:fs/promises';
 import { compileShader } from '../dist/compiler.js';
 
 // Execute the shipped GLSL loop's scalar control flow, sampling along a ray at
@@ -39,4 +40,20 @@ test('rays that escape or never approach a surface miss within their existing bu
   assert.equal(samples, 1);
   assert.equal(marcher(1, () => 1), 100);
   assert.equal(marcher(3, () => Number.NaN), 100);
+});
+
+test('Alloy preset reaches surfaces without changing its geometry or increasing its iteration budget', async () => {
+  const preset = JSON.parse(await readFile(new URL('../resources/presets/preset5/preset.v2.json', import.meta.url), 'utf8'));
+  const source = preset.visualizer.shader;
+  const current = compileShader(source, { maxRaymarchIterations: 96 });
+  const previous = compileShader(source.replace(/setStepSize\([\d.]+\)/, 'setStepSize(0.04586632133333666)'), { maxRaymarchIterations: 96 });
+  const steps = Number(current.frag.match(/const int MAX_ITERATIONS = (\d+);/)[1]);
+  const fraction = Number(current.frag.match(/const float STEP_SIZE_CONSTANT = ([\d.]+);/)[1]);
+  assert.equal(steps, 56);
+  assert.equal(current.geoGLSL, previous.geoGLSL);
+  assert.equal(current.colorGLSL, previous.colorGLSL);
+  assert.deepEqual(current.uniforms, previous.uniforms);
+  assert.equal(marcher(steps, t => .5 - t, .04586632133333666), 100);
+  const hit = marcher(steps, t => .5 - t, fraction);
+  assert.ok(hit > .49999 && hit <= .5);
 });
