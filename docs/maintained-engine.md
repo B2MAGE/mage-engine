@@ -33,15 +33,16 @@ node scripts/test_generated_shader_parse.cjs
 npm pack
 ```
 
-`npm test` rebuilds first. `npm pack` also rebuilds and emits `b2mage-mage-engine-1.0.4-mage.1.tgz`. No install/prepare hook runs in the consuming frontend, and the tarball requires no runtime npm dependencies.
+`npm test` rebuilds first. `npm pack` also rebuilds and emits `b2mage-mage-engine-1.0.4-mage.2.tgz`. No install/prepare hook runs in the consuming frontend, and the tarball requires no runtime npm dependencies.
 
 `scripts/build-package.mjs` is the package build entrypoint. It builds the engine and a separate compiler entry, copies source-owned shared modules and declarations, and includes dependency licenses. It reads six static GLSL scaffold strings from the pinned ShaderPark dependency because that dependency does not export them; extraction accepts literal strings only and fails if the dependency shape changes. It never rewrites `node_modules` or extracts JavaScript functions from a compiled engine bundle.
 
-`dist/` and `js/compiled-shader-shell.generated.js` are generated. Source compiler imports point to the maintained adapter; the packaged compiler entry points to the generated self-contained compiler. The distribution retains the existing filenames needed by the frontend's worker allowlist.
+`dist/` and `js/compiled-shader-shell.generated.js` are generated. The build replaces only the scaffold's known raymarch function with source-owned `js/raymarch.glsl`. A ray now reports a hit only after sampling the surface threshold. Exhausting the fixed iteration budget returns a miss, preventing conservative distance estimates for very thin shapes from shading a false full-height surface. This preserves the existing iteration and step-size budgets; difficult rays may remain transparent instead of drawing an unconfirmed hit. Both compiler and inert runtime validation consume the same generated scaffold. Source compiler imports point to the maintained adapter; the packaged compiler entry points to the generated self-contained compiler. The distribution retains the existing filenames needed by the frontend's worker allowlist.
 
 The regression suite checks:
 
-- All 16 existing scene fixtures produce byte-identical GLSL and uniforms to the baseline at iteration ceilings 32, 96 and 200. Retired templates remain test fixtures only.
+- All 16 existing scene fixtures preserve their GLSL and uniforms at iteration ceilings 32, 96 and 200, except for the deliberate shared raymarch termination change. Retired templates remain test fixtures only.
+- The shipped raymarch loop returns hits for actual surfaces, including the last permitted sample, and misses when a ray escapes or exhausts its budget. Thin-shape conservative distances cannot become false surfaces.
 - Production consumer bundling with minification preserves helpers such as `box`, `torus`, `cylinder` and `setStepSize`, which ShaderPark invokes dynamically.
 - Compiled mesh creation never executes the supplied source metadata; tampered compiled programs and executable properties are rejected.
 - Live settings validate the entire update before state changes.
@@ -59,7 +60,7 @@ The renderer receives validated data and calls `loadCompiledPreset`; source text
 ## Release procedure
 
 1. Commit and review the source plus lockfile, run the checks above, and complete frontend production/runtime verification with the local tarball.
-2. Merge into this fork, tag the reviewed commit as `v1.0.4-mage.1`, then rebuild and pack that exact commit with `npm ci`.
+2. Merge into this fork, tag the reviewed commit using the package version (currently `v1.0.4-mage.2`), then rebuild and pack that exact commit with `npm ci`.
 3. Attach the tarball to the fork's GitHub Release. Never replace an already consumed asset; use a new version for any changed bytes.
 4. Pin the frontend dependency to the complete release asset URL and commit the resulting lockfile integrity. Remove the old engine patch only after consumer tests pass.
 

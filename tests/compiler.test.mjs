@@ -6,12 +6,20 @@ import { compileShader } from '../dist/compiler.js';
 import { normalizeCompiledShader } from '../dist/compiled-shader.js';
 
 const baseline = JSON.parse(await readFile(new URL('./fixtures/compiler-parity.json', import.meta.url), 'utf8'));
+const maintainedRaymarch = (await readFile(new URL('../js/raymarch.glsl', import.meta.url), 'utf8')).trim();
+const baselineRaymarch = 'float intersect(vec3 ro, vec3 rd, float stepFraction) {\n'
+  + '    float t = 0.0;\n\tfor(int i = 0; i < MAX_ITERATIONS; ++i) {\n'
+  + '\t\tfloat h = surfaceDistance((ro+rd*t));\n'
+  + '\t\tif(h < intersection_threshold || t > max_dist) break;\n'
+  + '\t\tt += h*STEP_SIZE_CONSTANT;\n    }\n\treturn t;\n}';
 
-test('all existing templates preserve the exact compiled program and uniforms at each supported ceiling', () => {
+test('existing templates preserve their program and uniforms except for maintained raymarch termination', () => {
   assert.equal(baseline.fixtures.length, 16);
   for (const fixture of baseline.fixtures) for (const expected of fixture.outputs) {
     const artifact = compileShader(fixture.source, { maxRaymarchIterations: expected.ceiling });
-    const actual = createHash('sha256').update(JSON.stringify(artifact)).digest('hex');
+    assert.ok(artifact.frag.includes(maintainedRaymarch));
+    const comparable = { ...artifact, frag: artifact.frag.replace(maintainedRaymarch, baselineRaymarch) };
+    const actual = createHash('sha256').update(JSON.stringify(comparable)).digest('hex');
     assert.equal(actual, expected.sha256, `${fixture.sceneId}, ceiling ${expected.ceiling}`);
   }
 });
