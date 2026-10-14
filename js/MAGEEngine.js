@@ -33,69 +33,6 @@ const MAGE_VERSION = '1.1';
  * @property {boolean} [autoStart=false] - Automatically start rendering
  */
 
-var MAGETransientAudioResponse = class {
-  constructor() {
-    this.previous = new Float32Array(1024);
-    this.reset();
-  }
-  reset() {
-    this.previous.fill(0);
-    this.background = [0, 0, 0];
-    this.mean = 0;
-    this.variance = 0;
-    this.age = 0;
-    this.cooldown = 0;
-    this.envelope = 0;
-    this.primed = false;
-  }
-  update(spectrum, sampleRate, elapsed) {
-    const dt = Number.isFinite(elapsed) ? Math.min(Math.max(elapsed, 0), 1) : 0;
-    this.envelope *= Math.exp(-dt / .16);
-    this.cooldown = Math.max(0, this.cooldown - dt);
-    this.age += dt;
-    if (!spectrum || !Number.isFinite(sampleRate) || sampleRate <= 0 || dt <= 0) return this.envelope;
-    if (this.previous.length !== spectrum.length) {
-      this.previous = new Float32Array(spectrum.length);
-      this.reset();
-    }
-    const energy = [0, 0, 0],
-      flux = [0, 0, 0];
-    const binHz = sampleRate / (spectrum.length * 2);
-    for (let i = 1; i < spectrum.length && i * binHz <= 8000; i++) {
-      const hz = i * binHz;
-      if (hz < 40) continue;
-      const band = hz < 180 ? 0 : hz < 2000 ? 1 : 2;
-      const amplitude = Number.isFinite(spectrum[i]) ? Math.pow(10, Math.min(spectrum[i], 0) / 20) : 0;
-      const rise = Math.max(0, amplitude - this.previous[i]);
-      energy[band] += amplitude * amplitude;
-      flux[band] += rise * rise;
-      this.previous[i] = amplitude;
-    }
-    const learning = 1 - Math.exp(-dt / .65);
-    let score = 0,
-      audible = false;
-    for (let band = 0; band < 3; band++) {
-      energy[band] = Math.sqrt(energy[band]);
-      if (energy[band] > .0002) {
-        audible = true;
-        const weight = band === 0 ? 1 : band === 1 ? .8 : .65;
-        score = Math.max(score, weight * Math.sqrt(flux[band]) / Math.max(energy[band], this.background[band] * .5, .0002));
-      }
-      this.background[band] += learning * (energy[band] - this.background[band]);
-    }
-    const threshold = Math.max(.13, this.mean + 1.4 * Math.sqrt(this.variance));
-    if (this.primed && this.age > .12 && audible && this.cooldown === 0 && score > threshold) {
-      const strength = Math.min(1, .4 + .6 * (score - threshold) / Math.max(.2, 1 - threshold));
-      this.envelope = Math.max(this.envelope, strength);
-      this.cooldown = .16;
-    }
-    const deviation = score - this.mean;
-    this.mean += learning * deviation;
-    this.variance = (1 - learning) * (this.variance + learning * deviation * deviation);
-    this.primed = true;
-    return this.envelope;
-  }
-};
 var MAGE_RENDER_BUDGET = Object.freeze({
   maxRenderPixels: 2073600,
   maxLongestEdge: 1920,
@@ -155,15 +92,8 @@ export class MAGEEngine {
   #externalAudioFrames = [];
   #externalAudioLastFrame = null;
   #externalAudioReceivedAt = 0;
-  #externalTransientEnvelope = 0;
   #audioResponseConfig = null;
   #audioResponseWarnings = [];
-  #transientAudio = null;
-  #transientAnalyser = null;
-  #transientSource = null;
-  #transientSpectrum = null;
-  #transientSampleTime = null;
-  #transientWasPlaying = false;
   #syntheticPreviewEnabled = false;
   #syntheticPreviewSeed = 0;
   #syntheticPreviewTime = 0;
@@ -195,7 +125,6 @@ export class MAGEEngine {
   setAudioVolume(volume) {
     if (this.#audioAnalysis) this.#_resetAudioAnalysis();
     const nextVolume = Number.isFinite(volume) ? Math.min(Math.max(volume, 0), 1) : 1;
-    if (this.#transientAudio) this.#_disconnectTransientAnalyser();
     if (this.#audio) this.#audio.setVolume(nextVolume);
     if (this.#reversedAudio) this.#reversedAudio.setVolume(nextVolume);
     return nextVolume;
@@ -214,13 +143,7 @@ export class MAGEEngine {
     this.#mappedTime = 0;
     this.#externalAudioFrames = [];
     this.#externalAudioLastFrame = null;
-    this.#externalTransientEnvelope = 0;
-    if (this.#transientAudio) this.#_disconnectTransientAnalyser();
     this.#audioResponseMode = next;
-    if (next === "transient-v1") {
-      this.#transientAudio ??= new MAGETransientAudioResponse();
-      this.#transientAudio.reset();
-    } else this.#transientAudio = null;
   }
   getAudioResponseCapabilities() {
     const uniforms = this.#visualizer?.mesh?.material?.uniforms ?? {};
@@ -319,14 +242,12 @@ export class MAGEEngine {
       this.#audioAnalysisFrame = null;
       this.#externalAudioFrames = [];
       this.#externalAudioLastFrame = null;
-      this.#externalTransientEnvelope = 0;
     }
     this.#externalAudio = next;
     this.#externalAudioReceivedAt = performance.now();
     if (next) {
       this.#audioAnalysis?.disconnect();
       this.#audioAnalysisSource = null;
-      if (this.#transientAnalyser) this.#_disconnectTransientAnalyser();
       if (this.#audio?.isPlaying) this.#audio.pause();
       if (this.#reversedAudio?.isPlaying) this.#reversedAudio.pause();
       const frame = next.frame;
@@ -347,13 +268,6 @@ export class MAGEEngine {
       fresh: elapsed <= 1,
       audioTime: Math.min(604800, input.audioTime + (input.playing ? Math.min(elapsed, 1) : 0))
     };
-  }
-  #_sampleExternalTransientAudio(delta) {
-    this.#externalTransientEnvelope *= Math.exp(-Math.max(0, delta) / .16);
-    for (const frame of this.#externalAudioFrames.splice(0)) for (const hit of frame.hits) {
-      if (hit.band === "bass" || hit.band === "overall") this.#externalTransientEnvelope = Math.max(this.#externalTransientEnvelope, hit.strength);
-    }
-    return this.#externalTransientEnvelope;
   }
   getAudioAnalysis() {
     if (this.#externalAudio) {
@@ -383,7 +297,6 @@ export class MAGEEngine {
     this.#audioAnalysisSource = null;
     this.#audioAnalysisFrame = null;
     this.#externalAudioFrames = [];
-    this.#externalTransientEnvelope = 0;
   }
   #_syncAudioAnalysis() {
     if (this.#externalAudio) return;
@@ -427,41 +340,6 @@ export class MAGEEngine {
   getAudioResponseConfig() {
     return this.#audioResponseConfig ? normalizeAudioResponseConfig(this.#audioResponseConfig).config : null;
   }
-  #_disconnectTransientAnalyser() {
-    if (this.#transientAnalyser) {
-      this.#transientSource.getOutput().disconnect(this.#transientAnalyser.analyser);
-      this.#transientAnalyser.analyser.disconnect();
-    }
-    this.#transientAnalyser = null;
-    this.#transientSource = null;
-    this.#transientSpectrum = null;
-    this.#transientSampleTime = null;
-    this.#transientWasPlaying = false;
-    this.#transientAudio?.reset();
-  }
-  #_sampleTransientAudio(delta) {
-    const source = this.#isReversed && this.#reversedAudio?.isPlaying ? this.#reversedAudio : this.#audio;
-    if (source !== this.#transientSource) {
-      this.#_disconnectTransientAnalyser();
-      this.#transientSource = source;
-      this.#transientAnalyser = new AudioAnalyser(source, 2048);
-      this.#transientAnalyser.analyser.smoothingTimeConstant = 0;
-      this.#transientSpectrum = new Float32Array(this.#transientAnalyser.analyser.frequencyBinCount);
-    }
-    this.#transientWasPlaying = true;
-    this.#transientAnalyser.analyser.getFloatFrequencyData(this.#transientSpectrum);
-    const now = source.context.currentTime;
-    let elapsed = delta;
-    if (Number.isFinite(now)) {
-      if (Number.isFinite(this.#transientSampleTime)) elapsed = Math.max(0, now - this.#transientSampleTime);
-      this.#transientSampleTime = now;
-    }
-    if (elapsed > 1) {
-      this.#transientAudio.reset();
-      elapsed = delta;
-    }
-    return this.#transientAudio.update(this.#transientSpectrum, source.context.sampleRate, elapsed);
-  }
   setSyntheticPreview(enabled, seed = 0, tempoScale = 1) {
     const nextEnabled = Boolean(enabled);
     const nextSeed = Number.isFinite(seed) ? Math.trunc(seed) >>> 0 : 0;
@@ -482,7 +360,6 @@ export class MAGEEngine {
     this.#audioLoadCleanup?.();
     this.#audioLoadCleanup = null;
     if (this.#audioAnalysis) this.#_resetAudioAnalysis();
-    if (this.#transientAudio) this.#_disconnectTransientAnalyser();
     if (this.#audio?.isPlaying) this.#audio.stop();else this.#audio?.pause?.();
     if (this.#reversedAudio?.isPlaying) this.#reversedAudio.stop();else this.#reversedAudio?.pause?.();
     if (this.#audio) this.#audio.setBuffer(null);
@@ -1040,7 +917,6 @@ export class MAGEEngine {
     if (this.#audioAnalysis) this.#_resetAudioAnalysis();
     const duration = this.getAudioDuration();
     if (duration <= 0 || !Number.isFinite(time)) return false;
-    if (this.#transientAudio) this.#_disconnectTransientAnalyser();
     const clampedTime = Math.max(0, Math.min(time, duration));
     this.#playbackTime = clampedTime;
     const forwardWasPlaying = Boolean(this.#audio.isPlaying);
@@ -1117,7 +993,6 @@ export class MAGEEngine {
     if (this.#isDisposed) return;
     const generation = this.#audioLoadGeneration;
     if (this.#audioAnalysis) this.#_resetAudioAnalysis();
-    if (this.#transientAudio) this.#_disconnectTransientAnalyser();
     const previousVolume = this.#audio?.getVolume();
     this.#audio?.pause();
     this.#reversedAudio?.pause();
@@ -1587,7 +1462,6 @@ export class MAGEEngine {
     this.#audioLoadGeneration = (this.#audioLoadGeneration ?? 0) + 1;
     this.#audioLoadCleanup?.();
     this.#audioLoadCleanup = null;
-    if (this.#transientAudio) this.#_disconnectTransientAnalyser();
     this.#isDisposed = true;
     this.#isRunning = false;
     this.#renderLifecycleListeners?.clear();
@@ -2733,10 +2607,8 @@ export class MAGEEngine {
       if (this.#audioResponseMode === "mapped-v1") {
         mappedOutputs = this.#_sampleMappedAudio();
       } else if (externalPlaying) {
-        if (externalAudio.fresh) bass_input = this.#audioResponseMode === "transient-v1" ? this.#_sampleExternalTransientAudio(delta) : Math.pow(externalAudio.legacyAmplitude * this.#state.minimizing_factor, this.#state.power_factor) + delta * this.#state.base_speed;else this.#externalTransientEnvelope = 0;
-        if (this.#audioResponseMode !== "transient-v1" || !externalAudio.fresh) this.#externalAudioFrames.length = 0;
-      } else if (this.#audioResponseMode === "transient-v1" && hasPlayingAudio && !this.#previewMode) {
-        bass_input = this.#_sampleTransientAudio(delta);
+        if (externalAudio.fresh) bass_input = Math.pow(externalAudio.legacyAmplitude * this.#state.minimizing_factor, this.#state.power_factor) + delta * this.#state.base_speed;
+        this.#externalAudioFrames.length = 0;
       } else if (hasPlayingAudio) {
         const freqData = this.#audioAnalyser.getFrequencyData();
         bass_input = Math.pow(freqData[2] / 255 * this.#state.minimizing_factor, this.#state.power_factor) + delta * this.#state.base_speed;
@@ -2755,16 +2627,12 @@ export class MAGEEngine {
         const accent = .82 + Math.pow(Math.sin(accentPhase), 2) * .18;
         const texture = (Math.sin((this.#syntheticPreviewTime * 2.17 + this.#syntheticPreviewSeed * .001) * Math.PI * 2) + 1) * .025;
         const syntheticFrequency = Math.min(.98, .42 + kick * .5 * accent + offbeat + texture);
-        bass_input = this.#audioResponseMode === "transient-v1" ? Math.min(1, kick * accent + offbeat * .5) : Math.pow(syntheticFrequency * this.#state.minimizing_factor, this.#state.power_factor) + delta * this.#state.base_speed;
+        bass_input = Math.pow(syntheticFrequency * this.#state.minimizing_factor, this.#state.power_factor) + delta * this.#state.base_speed;
       }
-      if (!hasPlayingAudio && this.#transientWasPlaying) this.#_disconnectTransientAnalyser();
       if (mappedOutputs) {
         this.#state.currAudio = mappedOutputs.audioLevel;
         this.#state.size = .006 + mappedOutputs.size;
-      } else if (this.#previewMode) this.#_simulatePreviewAudio();else if (this.#audioResponseMode === "transient-v1") {
-        this.#state.currAudio = bass_input;
-        this.#state.size = .006 + bass_input;
-      } else {
+      } else if (this.#previewMode) this.#_simulatePreviewAudio();else {
         const val = Math.sin(this.#state.time) * this.#state.size * .02 + .1;
         this.#state.currAudio = bass_input + val * this.#state.base_speed + delta * this.#state.base_speed;
         this.#state.size = (1 - this.#state.easing_speed) * this.#state.currAudio + this.#state.easing_speed * this.#state.size + this.#state.volume_multiplier * .01;

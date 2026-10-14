@@ -4,6 +4,7 @@ import { BoxGeometry, BackSide } from 'three';
 import { initMAGE } from '../dist/mage-engine.js';
 import { createSculptureWithGeometry } from '../js/sculpture.js';
 import { compileShader } from '../dist/compiler.js';
+import { normalizeAudioResponseMode } from '../dist/audio-response.js';
 
 test('compiled mesh uses inert metadata and preserves material/uniform behavior', () => {
   const artifact = compileShader('let size = input(0.5); sphere(size);');
@@ -45,12 +46,12 @@ test('live settings validate the entire change before mutation and cannot replac
   assert.equal(engine.updateSettings({ state: { volume_multiplier: 1 } }), false);
 });
 
-test('bounded defaults and all existing audio modes survive packaging', () => {
+test('bounded defaults and Original/Selective audio modes survive packaging', () => {
   const engine = initMAGE({ autoStart: false, renderBudget: { maxRaymarchIterations: 9999, maxRenderPixels: 320000 } });
   try {
     assert.equal(engine.getRenderBudget().maxRaymarchIterations, 200);
     assert.equal(engine.getRenderBudget().maxRenderPixels, 320000);
-    for (const mode of ['legacy', 'transient-v1', 'mapped-v1']) {
+    for (const mode of ['legacy', 'mapped-v1']) {
       engine.setAudioResponseMode(mode);
       assert.equal(engine.getAudioResponseDiagnostics().mode, mode);
     }
@@ -61,4 +62,51 @@ test('bounded defaults and all existing audio modes survive packaging', () => {
     engine.stop();
     engine.stop();
   } finally { engine.dispose(); engine.dispose(); }
+});
+
+test('unsupported modes are rejected before changing the current audio configuration or queued frames', () => {
+  const engine = initMAGE({ autoStart: false });
+  const invalidModes = ['transient-v1', 'mapped-v2', '', null, 0, false, {}, []];
+  try {
+    assert.equal(normalizeAudioResponseMode(undefined), 'legacy');
+    for (const mode of ['legacy', 'mapped-v1']) {
+      engine.setAudioResponseMode(mode);
+      if (mode === 'mapped-v1') engine.setAudioResponseConfig({ version: 1, sensitivity: 2, mappings: [
+        { target: 'size', source: 'bass-level', amount: 1.5, attack: 0.1, release: 0.4 },
+      ] });
+      engine.setExternalAudioFrame({
+        frame: { sequence: 1, time: 2, levels: { bass: 0.8, mid: 0.3, treble: 0.1, overall: 0.5 }, hits: [] },
+        legacyAmplitude: 0.4, audioTime: 2, playing: true, loaded: true,
+      });
+      const config = engine.getAudioResponseConfig();
+      const queued = engine.getAudioAnalysis().queuedFrames;
+      for (const value of invalidModes) {
+        assert.throws(() => normalizeAudioResponseMode(value), /Unsupported music response version/);
+        assert.throws(() => engine.setAudioResponseMode(value), /Unsupported music response version/);
+        assert.equal(engine.getAudioResponseDiagnostics().mode, mode);
+        assert.deepEqual(engine.getAudioResponseConfig(), config);
+        assert.equal(engine.getAudioAnalysis().queuedFrames, queued);
+      }
+    }
+    engine.setAudioResponseMode();
+    assert.equal(engine.getAudioResponseDiagnostics().mode, 'legacy');
+    assert.equal(engine.getAudioResponseConfig(), null);
+  } finally { engine.dispose(); }
+});
+
+test('presets with unsupported audio modes fail before mutating current settings', () => {
+  const engine = initMAGE({ autoStart: false });
+  try {
+    engine.setAudioResponseMode('mapped-v1');
+    const state = engine.getEngineFields().state;
+    const previousSpeed = state.base_speed;
+    for (const audioResponse of ['transient-v1', 'invalid', null]) {
+      const preset = { audioResponse, state: { base_speed: previousSpeed + 1 } };
+      for (const input of [preset, JSON.stringify(preset)]) {
+        assert.throws(() => engine.loadPreset(input), /Unsupported music response version/);
+        assert.equal(engine.getAudioResponseDiagnostics().mode, 'mapped-v1');
+        assert.equal(state.base_speed, previousSpeed);
+      }
+    }
+  } finally { engine.dispose(); }
 });
