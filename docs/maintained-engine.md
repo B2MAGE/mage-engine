@@ -20,7 +20,7 @@ The behavior baseline is the frontend's patched `@notrac/mage@1.0.3` at frontend
 | Effect ordering and render target allocation | `js/MAGEFx.js`, `js/effects/AfterimagePass.js` |
 | Public API types | `types/` |
 
-The current legacy, transient-v1 and mapped-v1 audio modes are all retained. Removing compatibility modes is separate work. Upstream preview audio fields retain their initial defaults, and the fork's public `stop()` lifecycle method remains available.
+The supported creative audio modes are Original (`legacy`) and Selective (`mapped-v1`). Version `1.0.4-mage.3` removes the retired `transient-v1` detector, analyser and external-envelope paths. Unsupported mode values throw instead of silently selecting Original; an omitted mode still selects Original. The existing Original amplitude/timing formula and Selective shared analysis/mappings are unchanged. The `legacy` identifier names the supported Original response, not obsolete behavior to remove. Upstream preview audio fields retain their initial defaults, and the fork's public `stop()` lifecycle method remains available.
 
 ## Build and verification
 
@@ -33,7 +33,7 @@ node scripts/test_generated_shader_parse.cjs
 npm pack
 ```
 
-`npm test` rebuilds first. `npm pack` also rebuilds and emits `b2mage-mage-engine-1.0.4-mage.2.tgz`. No install/prepare hook runs in the consuming frontend, and the tarball requires no runtime npm dependencies.
+`npm test` rebuilds first. `npm pack` also rebuilds and emits `b2mage-mage-engine-1.0.4-mage.3.tgz`. No install/prepare hook runs in the consuming frontend, and the tarball requires no runtime npm dependencies.
 
 `scripts/build-package.mjs` is the package build entrypoint. It builds the engine and a separate compiler entry, copies source-owned shared modules and declarations, and includes dependency licenses. It reads six static GLSL scaffold strings from the pinned ShaderPark dependency because that dependency does not export them; extraction accepts literal strings only and fails if the dependency shape changes. It never rewrites `node_modules` or extracts JavaScript functions from a compiled engine bundle.
 
@@ -47,7 +47,7 @@ The regression suite checks:
 - Compiled mesh creation never executes the supplied source metadata; tampered compiled programs and executable properties are rejected.
 - Live settings validate the entire update before state changes.
 - Audio analysis is independent of block size, mappings are independent of render frequency, and disposed async audio sessions cannot reconnect.
-- Render budgets and all existing audio modes survive the packaged entrypoint.
+- Render budgets and Original/Selective audio modes survive the packaged entrypoint. Invalid and retired modes are rejected before changing the active response, settings, mappings or queued audio frames.
 
 The original `scripts/test_audio_analysis.cjs` currently fails three expectations against unchanged upstream source: its 64-bin bass fixture misses the defined bass band, and it expects an `audioState` argument to alter a generator that does not read that argument. `npm run test:upstream` retains this diagnostic. These failures also occur on the merged upstream baseline; this release does not change those audio/generation algorithms to satisfy stale expectations. The active sample-driven audio path has separate passing behavior tests above.
 
@@ -60,7 +60,7 @@ The renderer receives validated data and calls `loadCompiledPreset`; source text
 ## Release procedure
 
 1. Commit and review the source plus lockfile, run the checks above, and complete frontend production/runtime verification with the local tarball.
-2. Merge into this fork, tag the reviewed commit using the package version (currently `v1.0.4-mage.2`), then rebuild and pack that exact commit with `npm ci`.
+2. Merge into this fork, tag the reviewed commit using the package version (currently `v1.0.4-mage.3`), then rebuild and pack that exact commit with `npm ci`.
 3. Attach the tarball to the fork's GitHub Release. Never replace an already consumed asset; use a new version for any changed bytes.
 4. Pin the frontend dependency to the complete release asset URL and commit the resulting lockfile integrity. Remove the old engine patch only after consumer tests pass.
 

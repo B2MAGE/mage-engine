@@ -333,7 +333,7 @@ export interface MAGEEngineAPI {
    * @param tempoScale Preview-only tempo multiplier, clamped to 0.25-2; defaults to 1.
    */
   setSyntheticPreview(enabled: boolean, seed?: number, tempoScale?: number): void;
-  /** Select versioned audio analysis. Missing/legacy preserves the original mapping. */
+  /** Select Original (legacy) or Selective (mapped-v1). Omission selects Original; unsupported modes throw. */
   setAudioResponseMode(mode?: AudioResponseMode): void;
   /** Updates settings without restarting playback. Mode remains explicitly opt-in. */
   setAudioResponseConfig(value: unknown): AudioResponseConfig;

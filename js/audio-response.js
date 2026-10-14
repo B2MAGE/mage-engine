@@ -18,7 +18,9 @@ export function createDefaultAudioResponseConfig() {
 }
 
 export function normalizeAudioResponseMode(value) {
-	return value === 'mapped-v1' || value === 'transient-v1' ? value : 'legacy';
+	if (value === undefined || value === 'legacy') return 'legacy';
+	if (value === 'mapped-v1') return 'mapped-v1';
+	throw new TypeError('Unsupported music response version.');
 }
 
 function boundedNumber(value, fallback, min, max, label, warnings) {
