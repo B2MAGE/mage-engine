@@ -1,0 +1,21 @@
+{
+  "policyVersion": 1,
+  "accepted": [
+    { "id": "simple-sphere", "source": "sphere(0.5);" },
+    { "id": "frame-and-smooth-csg", "source": "boxFrame(vec3(0.5), 0.05); blend(0.1); sphere(0.3);" },
+    { "id": "bounded-fractal-noise", "source": "let n = fractalNoise(getSpace()); sphere(0.5 + 0.03 * n);" },
+    { "id": "reflections-and-occlusion", "source": "setMaxReflections(2); occlusion(0.5); sphere(0.5);" }
+  ],
+  "rejected": [
+    { "id": "finite-binary-amplification", "kind": "chain", "depth": 20, "multiplicity": 2, "limit": "expanded-cost" },
+    { "id": "finite-wide-amplification", "kind": "chain", "depth": 4, "multiplicity": 50, "limit": "expanded-cost" },
+    { "id": "saturating-overflow", "kind": "chain", "depth": 50, "multiplicity": 10, "limit": "expanded-cost" },
+    { "id": "deep-finite-call-chain", "kind": "chain", "depth": 65, "multiplicity": 1, "limit": "call-depth" },
+    { "id": "recursive-cycle", "kind": "body", "body": "return surfaceDistance(p);", "limit": "cycles" },
+    { "id": "cycle-through-raymarch", "kind": "body", "body": "return intersect(p, vec3(1.0), 0.8);", "limit": "cycles" },
+    { "id": "cycle-through-occlusion", "kind": "body", "body": "return occlusion(p, vec3(1.0));", "limit": "cycles" },
+    { "id": "unknown-call", "kind": "body", "body": "return mysteriousGpuWork(p);", "limit": "unsupported" },
+    { "id": "unsupported-loop", "kind": "body", "body": "for(int i=0;i<4;i++){p.x+=1.0;} return p.x;", "limit": "unsupported" },
+    { "id": "unsupported-switch", "kind": "body", "body": "switch(int(p.x)){case 0: return 1.0;} return 0.0;", "limit": "unsupported" }
+  ]
+}

@@ -62,6 +62,29 @@ The original `scripts/test_audio_analysis.cjs` currently fails three expectation
 
 The renderer receives validated data and calls `loadCompiledPreset`; source text there is inert metadata. `loadPreset` with raw source remains an API for trusted local content. Do not route user source through that API. Browser isolation, origin/CSP restrictions, worker termination and cross-window protocol validation remain the consuming application's responsibilities. Engine render budgets bound workload; they cannot guarantee that a GPU driver will never stall.
 
+### Expanded shader workload policy v1 (PL-03)
+
+`normalizeCompiledShader` independently estimates expanded GLSL computation before accepting an artifact. `analyzeCompiledShader` returns the same normalized artifact alongside a `ShaderWorkloadReport`; its report is diagnostic output only, never a trusted assertion from the compiler worker. The artifact shape has no budget field. The worker compiler, parent application, renderer, `loadCompiledPreset`, visualizer and final material-construction path each use normalization at their boundary. Calling the engine directly does not skip this check.
+
+The estimate counts every syntactic call with multiplicity, follows the whole acyclic function graph, and charges repeated arithmetic tokens as well as intrinsic operations. Branches are summed conservatively. Scalar/vector/matrix built-ins have explicit costs and allowed arities; trigonometry and other expensive intrinsics cost more. The actual pinned scaffold bodies account for primitives, noise, lighting, shadows, occlusion and normal sampling. Same-name/same-arity helper overloads are summed rather than guessing a cheaper type overload. All authored functions are bounded, including unused functions.
+
+The trusted raymarch loop uses the effective capped iteration count; reflection loops use the effective reflection count. Fixed trusted loops include up to ten fractal-noise samples, four spherical-distribution samples and eight occlusion samples. Loop syntax and the occlusion constant are asserted against the pinned scaffold, so an unsupported upstream change fails instead of silently reducing its estimate. This adds no scene-quality reduction: existing iteration, reflection and step-size normalization stays unchanged. Accepted GLSL, uniforms, Original and Selective audio behavior stay unchanged.
+
+| Policy v1 limit | Maximum |
+| --- | --- |
+| Total authored GLSL tokens | 60,000 |
+| Delimiter or conditional nesting | 64 |
+| Authored function definitions | 512 |
+| Call depth, including trusted helpers | 64 |
+| Expanded cost of any authored function | 2,000,000 abstract work units |
+| Expanded fragment cost, including trusted render loops | 80,000,000 abstract work units per pixel |
+
+Existing serialized-artifact byte and uniform bounds still apply before tokenization. Iterative delimiter and graph traversals avoid JavaScript recursion; graph costs saturate at 80,000,001 before any multiplication or addition could grow into unsafe integers. No expanded source string or expanded call tree is constructed. Unknown calls, unsupported control constructs, recursive cycles (including cycles through trusted helpers), excessive nesting and excessive finite amplification are rejected before GPU submission. `ShaderWorkloadError` exposes a stable reason and, for exceeded limits, bounded actual/maximum values. Its wording identifies a limit without accusing the scene author of malicious behavior.
+
+These are conservative weighted units, not GPU instruction counts or elapsed-time predictions. The engine's existing pixel, pixel-ratio and frame-rate budgets independently bound rendering dimensions and submission frequency; this estimate does not model device-specific speed, post-processing passes or GPU-driver defects. Passing validation is not a responsiveness guarantee.
+
+`tests/fixtures/shader-workload.v1.json` commits accepted and rejected cases, including finite repeated-call chains that would overflow an unbounded estimator. Tests cover both-branch/diamond expansion, noise and overload accounting, configured iterations/reflections, parser bounds and rejection before any material or mesh work. The separate compiler-parity suite continues checking unchanged output for all 16 historical fixtures at 32/96/200 iterations. Consumer compatibility additionally measures all 14 current templates, authored and preview Builder forms, maximum rendering settings and boundary Builder designs; its versioned corpus and measured validation timings live in the frontend repository. No current catalog template is excepted from this policy. New limits or exceptions require a versioned policy and explicit compatibility results.
+
 ## Release procedure
 
 1. Commit and review the source plus lockfile, run the checks above, and complete frontend production/runtime verification with the local tarball.
