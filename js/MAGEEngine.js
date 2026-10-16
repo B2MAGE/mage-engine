@@ -1,4 +1,4 @@
-import { Scene, SphereGeometry, Vector3, PerspectiveCamera, WebGLRenderer, Color, Timer, AudioListener, Audio, AudioLoader, AudioAnalyser, CubeTextureLoader, Raycaster, RGBAFormat, UnsignedByteType, WebGLRenderTarget, SRGBColorSpace, NoToneMapping, LinearToneMapping, ReinhardToneMapping, CineonToneMapping, ACESFilmicToneMapping, AgXToneMapping, NeutralToneMapping, log, BoxGeometry } from 'three';
+import { Scene, SphereGeometry, Vector3, Vector4, PerspectiveCamera, WebGLRenderer, Color, Timer, AudioListener, Audio, AudioLoader, AudioAnalyser, CubeTextureLoader, Raycaster, RGBAFormat, UnsignedByteType, WebGLRenderTarget, SRGBColorSpace, NoToneMapping, LinearToneMapping, ReinhardToneMapping, CineonToneMapping, ACESFilmicToneMapping, AgXToneMapping, NeutralToneMapping, log, BoxGeometry } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createDomInputSource, createReactPointerHandlers } from './helpers.js';
 import { MAGEVisualizer } from './MAGEVisualizer.js';
@@ -71,7 +71,35 @@ function mageCaptureDimensions(width, height) {
 function mageCaptureSettleFrames(value) {
   return Number.isFinite(value) && value > 0 ? Math.min(4, Math.max(1, Math.floor(value))) : 2;
 }
+function graphicsCount(value) {
+  return Number.isFinite(value) && value > 0 ? Math.min(Number.MAX_SAFE_INTEGER, Math.floor(value)) : 0;
+}
+function createMageState() {
+  return {
+    time_multiplier: 1, mouse: new Vector3(), currMouse: new Vector3(), size: 0,
+    pointerDown: 0, pointerDownMultiplier: 0, currPointerDown: 0,
+    currAudio: 0, currBass: 0, currMid: 0, currTreble: 0, currEnergy: 0,
+    currCentroid: 0, currEnergyTrend: 0.5, audioMappingIntensity: 1,
+    time: 0, volume_multiplier: 0, minimizing_factor: .8, power_factor: 8,
+    base_speed: .2, easing_speed: .6, camTilt: 0, camOrientationMode: 0,
+    camOrientationSpeed: 1
+  };
+}
 export class MAGEEngine {
+  #sceneDefaults = null;
+  #preparedScene = null;
+  #sceneGeneration = 0;
+  #skyboxGeneration = 0;
+  #initialScene = 'default';
+  #graphicsDiagnostics = {
+    contextsCreated: 0, contextsDisposed: 0, submittedFrames: 0,
+    firstContextAt: null, lastContextAt: null, lastContextDisposedAt: null,
+    firstFrameAt: null, lastFrameAt: null,
+    peakGeometries: 0, peakTextures: 0, peakPrograms: 0,
+    candidatesStarted: 0, candidatesPrepared: 0, candidatesActivated: 0, candidatesDiscarded: 0,
+    preparationStartedAt: null, programsReadyAt: null, candidateFrameAt: null, activatedAt: null,
+    preparationMode: null
+  };
   #pixelRatio = null;
   #renderBudget = MAGE_RENDER_BUDGET;
   #viewportPixelRatio = 0;
@@ -104,12 +132,44 @@ export class MAGEEngine {
       ...this.#renderBudget
     });
   }
+  /** Fixed-size, local snapshot. Counts render submissions, not GPU completion. */
+  getGraphicsDiagnostics() {
+    const geometries = graphicsCount(this.#renderer?.info?.memory?.geometries);
+    const textures = graphicsCount(this.#renderer?.info?.memory?.textures);
+    const programs = graphicsCount(this.#renderer?.info?.programs?.length);
+    const diagnostics = this.#graphicsDiagnostics;
+    diagnostics.peakGeometries = Math.max(diagnostics.peakGeometries, geometries);
+    diagnostics.peakTextures = Math.max(diagnostics.peakTextures, textures);
+    diagnostics.peakPrograms = Math.max(diagnostics.peakPrograms, programs);
+    return Object.freeze({ ...diagnostics, geometries, textures, programs,
+      running: this.#isRunning, disposed: this.#isDisposed });
+  }
+  #_recordGraphicsEvent(type) {
+    const diagnostics = this.#graphicsDiagnostics;
+    diagnostics.peakGeometries = Math.max(diagnostics.peakGeometries, graphicsCount(this.#renderer?.info?.memory?.geometries));
+    diagnostics.peakTextures = Math.max(diagnostics.peakTextures, graphicsCount(this.#renderer?.info?.memory?.textures));
+    diagnostics.peakPrograms = Math.max(diagnostics.peakPrograms, graphicsCount(this.#renderer?.info?.programs?.length));
+    const now = performance.now();
+    if (type === 'context-created') {
+      diagnostics.contextsCreated = Math.min(Number.MAX_SAFE_INTEGER, diagnostics.contextsCreated + 1);
+      diagnostics.firstContextAt ??= now;
+      diagnostics.lastContextAt = now;
+    } else if (type === 'context-disposed') {
+      diagnostics.contextsDisposed = Math.min(Number.MAX_SAFE_INTEGER, diagnostics.contextsDisposed + 1);
+      diagnostics.lastContextDisposedAt = now;
+    } else if (type === 'frame' && this.#visualizer?.mesh) {
+      diagnostics.submittedFrames = Math.min(Number.MAX_SAFE_INTEGER, diagnostics.submittedFrames + 1);
+      diagnostics.firstFrameAt ??= now;
+      diagnostics.lastFrameAt = now;
+    }
+  }
   subscribeRenderLifecycle(listener) {
     if (typeof listener !== "function" || this.#isDisposed) return () => {};
     this.#renderLifecycleListeners.add(listener);
     return () => this.#renderLifecycleListeners.delete(listener);
   }
   #_notifyRenderLifecycle(type) {
+    this.#_recordGraphicsEvent(type);
     for (const listener of this.#renderLifecycleListeners) {
       try {
         listener({
@@ -437,6 +497,337 @@ export class MAGEEngine {
     if (!preset || typeof preset.visualizer?.shader !== "string" || !preset.visualizer.shader.trim()) throw new Error("Compiled presets require inert shader source metadata.");
     return MAGEEngine.prototype.loadPreset.call(this, preset, artifact);
   }
+  /** Build one independently owned replacement without changing the active scene. */
+  async prepareCompiledPreset(presetInput, compiledArtifact, { signal, timeoutMs = 10000, configure } = {}) {
+    if (this.#isDisposed) throw new Error('Rendering stopped.');
+    if (configure !== undefined && typeof configure !== 'function') throw new TypeError('Scene configuration must be a function.');
+    signal?.throwIfAborted();
+    const artifact = normalizeCompiledShader(compiledArtifact, { maxRaymarchIterations: this.#renderBudget.maxRaymarchIterations });
+    const preset = MAGEPreset.from(presetInput);
+    if (!preset || typeof preset.visualizer?.shader !== 'string' || !preset.visualizer.shader.trim()) {
+      throw new Error('Compiled presets require inert shader source metadata.');
+    }
+    if (this.#preparedScene) this.discardPreparedPreset(this.#preparedScene.token);
+    if (!this.#scene) {
+      this.#_createScene();
+      this.#composer = this.fx.applyPostProcessing(this.#scene, this.#renderer, this.#camera);
+    }
+    const controller = new AbortController();
+    const token = Object.freeze({});
+    const candidate = { token, generation: ++this.#sceneGeneration, controller, ready: false, disposed: false,
+      scene: new Scene(), camera: this.#sceneDefaults.camera.clone(false), state: createMageState(),
+      visualizer: null, fx: null, composer: null, renderTarget: null, rtScene: null, rtCamera: null,
+      controls: null, preset, skyboxCleanup: null, abortCleanup: null };
+    this.#preparedScene = candidate;
+    const cancel = () => this.discardPreparedPreset(token);
+    signal?.addEventListener('abort', cancel, { once: true });
+    candidate.abortCleanup = () => signal?.removeEventListener('abort', cancel);
+    const limit = Number.isFinite(timeoutMs) ? Math.min(15000, Math.max(1, timeoutMs)) : 10000;
+    const timer = setTimeout(() => controller.abort(new Error('Scene graphics preparation timed out.')), limit);
+    const diagnostics = this.#graphicsDiagnostics;
+    diagnostics.candidatesStarted = Math.min(Number.MAX_SAFE_INTEGER, diagnostics.candidatesStarted + 1);
+    diagnostics.preparationStartedAt = performance.now();
+    diagnostics.programsReadyAt = diagnostics.candidateFrameAt = null;
+    const assertCurrent = () => {
+      controller.signal.throwIfAborted();
+      if (this.#isDisposed || this.#preparedScene !== candidate || candidate.disposed) throw new Error('Scene preparation was superseded.');
+      if (this.#renderer.getContext().isContextLost()) throw new Error('Graphics context was lost.');
+    };
+    try {
+      candidate.camera.aspect = this.#camera.aspect;
+      candidate.camera.updateProjectionMatrix();
+      candidate.controls = this.#_candidateControls(candidate.camera, this.#sceneDefaults.controls);
+      this.#_withSceneResources(candidate, () => {
+        this.#visualizer = new MAGEVisualizer(this);
+        this.fx = new MAGEEffects(this);
+        this.#visualizer.loadCompiled(preset.visualizer.shader, artifact);
+        if (typeof preset.visualizer.scale === 'number') this.#visualizer.scale = preset.visualizer.scale;
+        this.#_loadControls(preset.controls);
+        if (preset.state) this.#_applyStatePatch(preset.state, { applied: [], warnings: [] });
+        if (preset.intent) this.#_applyCompactIntent(preset.intent);
+        this.fx.bleachBypassShader.enabled = preset.fx?.passes?.bleachBypass === true;
+        this.fx.toonShader.enabled = preset.fx?.passes?.toon === true;
+        this.#_applyCompactFx(preset.fx, false);
+        this.#_updateVisualizer();
+        this.#composer = this.fx.applyPostProcessing(this.#scene, this.#renderer, this.#camera);
+        this.#composer.renderToScreen = false;
+        this.#_syncSobelResolution();
+      });
+      // Trusted host material/uniform setup must precede compilation and the
+      // verified first draw. No asynchronous work or scene source is accepted.
+      const configured = configure?.(this.#_preparedSceneFields(candidate));
+      if (configured?.then) throw new TypeError('Scene configuration must be synchronous.');
+      assertCurrent();
+      const skybox = Promise.resolve().then(() => { assertCurrent(); return this.#_prepareSkybox(candidate, preset.visualizer.skyboxPreset, controller.signal); });
+      const programs = Promise.resolve().then(() => { assertCurrent(); return this.#_preparePrograms(candidate, controller.signal); });
+      await Promise.all([skybox, programs]);
+      assertCurrent();
+      diagnostics.programsReadyAt = performance.now();
+      this.#_withSceneResources(candidate, () => {
+        this.#camera.updateMatrixWorld();
+        this.#composer.render(0);
+        // Preparation must not seed the displayed afterimage history.
+        if (this.fx.afterImagePass.enabled) this.fx.afterImagePass.shader.resetHistory?.(this.#renderer);
+      });
+      await this.#_waitForGraphicsSubmission(controller.signal);
+      assertCurrent();
+      candidate.ready = true;
+      diagnostics.candidatesPrepared = Math.min(Number.MAX_SAFE_INTEGER, diagnostics.candidatesPrepared + 1);
+      diagnostics.candidateFrameAt = performance.now();
+      this.getGraphicsDiagnostics();
+      return token;
+    } catch (error) {
+      this.discardPreparedPreset(token);
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  getPreparedSceneFields(token) {
+    const candidate = this.#preparedScene;
+    if (!candidate || candidate.token !== token || candidate.disposed || !candidate.ready || this.#isDisposed) {
+      throw new Error('Prepared scene is unavailable.');
+    }
+    return this.#_preparedSceneFields(candidate);
+  }
+  #_preparedSceneFields(candidate) {
+    return { scene: candidate.scene, camera: candidate.camera, state: candidate.state,
+      visualizer: candidate.visualizer, controls: candidate.controls };
+  }
+  activatePreparedPreset(token, { time } = {}) {
+    const candidate = this.#preparedScene;
+    this.getPreparedSceneFields(token);
+    if (time !== undefined && (!Number.isFinite(time) || time < 0 || time > 604800)) throw new TypeError('Invalid activation time.');
+    const previous = this.#_sceneResources();
+    // Camera and controls remain session-owned; only their scene settings change.
+    const camera = this.#camera;
+    const controls = this.#controls;
+    const preset = candidate.preset;
+    const nextMode = normalizeAudioResponseMode(preset.audioResponse);
+    const normalized = nextMode === 'mapped-v1' ? normalizeAudioResponseConfig(preset.audioResponseConfig) : null;
+    const nextConfig = normalized?.config ?? null;
+    const modeChanged = nextMode !== this.#audioResponseMode;
+    const configChanged = JSON.stringify(nextConfig) !== JSON.stringify(this.#audioResponseConfig);
+    const replaceAnalysis = modeChanged || nextConfig?.sensitivity !== this.#audioResponseConfig?.sensitivity;
+    // Prepare fallible allocations before touching active audio or graphics.
+    const nextAnalysis = replaceAnalysis ? nextMode === 'mapped-v1' ? new AudioAnalysisSession() : null : this.#audioAnalysis;
+    const nextMapper = modeChanged || configChanged ? nextMode === 'mapped-v1' ? new AudioResponseMapper(nextConfig) : null : this.#audioMapper;
+    const nextSynthetic = modeChanged ? nextMode === 'mapped-v1'
+      ? new SyntheticAudioFrames(this.#syntheticPreviewSeed, this.#syntheticPreviewTempoScale) : null : this.#syntheticAudioFrames;
+    if (replaceAnalysis && nextAnalysis) nextAnalysis.setSensitivity(nextConfig.sensitivity);
+    if (!modeChanged && configChanged && nextMapper && this.#audioMapper) nextMapper.nextEventId = this.#audioMapper.nextEventId;
+    const previousCamera = camera.clone(false);
+    const previousControls = this.#_candidateControls(camera);
+    // Keep the newest input state while retaining the candidate's authored settings.
+    for (const key of ['time', 'size', 'currAudio', 'currBass', 'currMid', 'currTreble', 'currEnergy',
+      'currCentroid', 'currEnergyTrend', 'pointerDown', 'currPointerDown']) candidate.state[key] = this.#state[key];
+    candidate.state.mouse.copy(this.#state.mouse);
+    candidate.state.currMouse.copy(this.#state.currMouse);
+    if (time !== undefined) candidate.state.time = time;
+    if (!candidate.composer?.passes?.[0]) throw new Error('Prepared scene pipeline is unavailable.');
+    try {
+      // Present once even when paused. Keep the previous scene until both this
+      // draw and the synchronous commit succeed, so a late failure can repaint it.
+      this.#_withSceneResources(candidate, () => {
+        this.#camera.aspect = camera.aspect;
+        this.#camera.updateProjectionMatrix();
+        this.#camera.updateMatrixWorld();
+        this.#composer.setSize(this.#renderer.domElement.width, this.#renderer.domElement.height);
+        this.#_syncSobelResolution();
+        this.#composer.renderToScreen = true;
+        try { this.#composer.render(0); } finally { this.#composer.renderToScreen = false; }
+      });
+      camera.copy(candidate.camera, false);
+      for (const key of ['target', 'target0', 'position0']) controls[key].copy(candidate.controls[key]);
+      for (const key of ['zoom0', 'autoRotate', 'autoRotateSpeed']) controls[key] = candidate.controls[key];
+    } catch (error) {
+      PerspectiveCamera.prototype.copy.call(camera, previousCamera, false);
+      for (const key of ['target', 'target0', 'position0']) Vector3.prototype.copy.call(controls[key], previousControls[key]);
+      for (const key of ['zoom0', 'autoRotate', 'autoRotateSpeed']) controls[key] = previousControls[key];
+      if (replaceAnalysis) { try { nextAnalysis?.dispose(); } catch {} }
+      try {
+        this.#_withSceneResources(previous, () => this.#composer.render(0));
+      } catch {
+        this.stop();
+        this.#_notifyRenderLifecycle('error');
+        throw new Error('The renderer could not restore the active scene.');
+      }
+      throw error;
+    }
+    candidate.camera = camera;
+    candidate.rtCamera = camera;
+    candidate.controls = controls;
+    candidate.composer.passes[0].camera = camera;
+    candidate.composer.renderToScreen = true;
+    this.#_assignSceneResources(candidate);
+    this.#currentPreset = preset;
+    const previousAnalysis = this.#audioAnalysis;
+    this.#audioAnalysis = nextAnalysis;
+    this.#audioMapper = nextMapper;
+    this.#syntheticAudioFrames = nextSynthetic;
+    this.#audioResponseMode = nextMode;
+    this.#audioResponseConfig = nextConfig;
+    this.#audioResponseWarnings = normalized?.warnings ?? [];
+    if (replaceAnalysis) this.#audioAnalysisSource = null;
+    if (modeChanged) {
+      this.#audioAnalysisFrame = null;
+      this.#mappedSource = 'none'; this.#mappedTime = 0;
+      this.#externalAudioFrames = []; this.#externalAudioLastFrame = null;
+    }
+    this.#renderer.toneMapping = this.fx.toneMapping.method;
+    this.#renderer.toneMappingExposure = this.fx.toneMapping.exposure;
+    this.#preparedScene = null;
+    this.#skyboxGeneration++;
+    this.#_pendingSkyboxLoad = null;
+    candidate.abortCleanup?.();
+    candidate.abortCleanup = null;
+    this.#graphicsDiagnostics.candidatesActivated = Math.min(Number.MAX_SAFE_INTEGER, this.#graphicsDiagnostics.candidatesActivated + 1);
+    this.#graphicsDiagnostics.activatedAt = performance.now();
+    this.#_recordGraphicsEvent('frame');
+    if (replaceAnalysis) { try { previousAnalysis?.dispose(); } catch { /* The committed scene owns its new audio state. */ } }
+    this.#_disposeSceneResources(previous);
+    return preset;
+  }
+  discardPreparedPreset(token) {
+    const candidate = this.#preparedScene;
+    if (!candidate || candidate.token !== token) return;
+    this.#preparedScene = null;
+    candidate.disposed = true;
+    candidate.controller.abort(new Error('Scene preparation was cancelled.'));
+    candidate.abortCleanup?.();
+    candidate.skyboxCleanup?.();
+    this.#_disposeSceneResources(candidate);
+    this.#graphicsDiagnostics.candidatesDiscarded = Math.min(Number.MAX_SAFE_INTEGER, this.#graphicsDiagnostics.candidatesDiscarded + 1);
+  }
+  #_sceneResources() {
+    return { scene: this.#scene, camera: this.#camera, controls: this.#controls, state: this.#state,
+      visualizer: this.#visualizer, fx: this.fx, composer: this.#composer,
+      renderTarget: this.#renderTarget, rtScene: this.#rtScene, rtCamera: this.#rtCamera };
+  }
+  #_assignSceneResources(resources) {
+    this.#scene = resources.scene; this.#camera = resources.camera; this.#controls = resources.controls;
+    this.#state = resources.state; this.#visualizer = resources.visualizer; this.fx = resources.fx;
+    this.#composer = resources.composer; this.#renderTarget = resources.renderTarget;
+    this.#rtScene = resources.rtScene; this.#rtCamera = resources.rtCamera;
+  }
+  #_withSceneResources(resources, operation) {
+    const previous = this.#_sceneResources();
+    const renderer = this.#renderer;
+    const graphics = { target: renderer.getRenderTarget(), face: renderer.getActiveCubeFace(), mip: renderer.getActiveMipmapLevel(),
+      viewport: renderer.getViewport(new Vector4()), scissor: renderer.getScissor(new Vector4()), scissorTest: renderer.getScissorTest(),
+      clearColor: renderer.getClearColor(new Color()), clearAlpha: renderer.getClearAlpha(), autoClear: renderer.autoClear,
+      toneMapping: renderer.toneMapping, exposure: renderer.toneMappingExposure, shaderError: renderer.debug.onShaderError };
+    let shaderFailed = false;
+    // Let Three finish unwinding its own render stacks before rejecting a bad
+    // candidate program. Throwing from its debug hook can strand those stacks.
+    renderer.debug.onShaderError = () => { shaderFailed = true; };
+    this.#_assignSceneResources(resources);
+    try {
+      renderer.toneMapping = this.fx?.toneMapping.method ?? graphics.toneMapping;
+      renderer.toneMappingExposure = this.fx?.toneMapping.exposure ?? graphics.exposure;
+      const result = operation();
+      if (shaderFailed) throw new Error("The scene's GPU program could not be compiled.");
+      return result;
+    } finally {
+      Object.assign(resources, this.#_sceneResources());
+      this.#_assignSceneResources(previous);
+      renderer.setRenderTarget(graphics.target, graphics.face, graphics.mip);
+      renderer.setViewport(graphics.viewport); renderer.setScissor(graphics.scissor); renderer.setScissorTest(graphics.scissorTest);
+      renderer.setClearColor(graphics.clearColor, graphics.clearAlpha); renderer.autoClear = graphics.autoClear;
+      renderer.toneMapping = graphics.toneMapping; renderer.toneMappingExposure = graphics.exposure;
+      renderer.debug.onShaderError = graphics.shaderError;
+    }
+  }
+  #_candidateControls(camera, active = this.#controls) {
+    return { target: active.target.clone(), target0: active.target0.clone(), position0: active.position0.clone(),
+      zoom0: active.zoom0, autoRotate: active.autoRotate, autoRotateSpeed: active.autoRotateSpeed,
+      reset() {
+        this.target.copy(this.target0); camera.position.copy(this.position0); camera.zoom = this.zoom0;
+        camera.lookAt(this.target); camera.updateProjectionMatrix(); camera.updateMatrixWorld();
+      } };
+  }
+  #_prepareSkybox(candidate, input, signal) {
+    const normalized = this.#_normalizeSkyboxInput(input);
+    const resolved = normalized ? this.#_resolveSkyboxPath(normalized) : null;
+    if (!resolved?.faceUrls) {
+      candidate.scene.background = null;
+      candidate.visualizer.skyboxPreset = null;
+      return Promise.resolve();
+    }
+    candidate.visualizer.skyboxPreset = resolved.skyboxId;
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = error => {
+        if (settled) return;
+        settled = true; signal.removeEventListener('abort', abort); candidate.skyboxCleanup = null;
+        if (error) reject(error); else resolve();
+      };
+      const abort = () => finish(signal.reason ?? new Error('Scene preparation was cancelled.'));
+      candidate.skyboxCleanup = abort;
+      signal.addEventListener('abort', abort, { once: true });
+      candidate.scene.background = new CubeTextureLoader().load(resolved.faceUrls, () => finish(), undefined,
+        () => finish(new Error('Scene background could not load.')));
+      if (signal.aborted) abort();
+    });
+  }
+  #_preparePrograms(candidate, signal) {
+    const renderer = this.#renderer;
+    const materials = this.#_withSceneResources(candidate, () => renderer.compile(candidate.scene, candidate.camera));
+    const parallel = renderer.extensions.has('KHR_parallel_shader_compile');
+    this.#graphicsDiagnostics.preparationMode = parallel ? 'parallel' : 'first-use';
+    if (!parallel) return Promise.resolve();
+    // Pinned Three r183 exposes programs on material properties. Owning this
+    // small poll lets cancellation stop before resources are disposed; Three's
+    // compileAsync retains an uncancellable timer that dereferences them later.
+    const programs = [...materials].map(material => renderer.properties.get(material).currentProgram);
+    return this.#_pollGraphics(signal, () => programs.every(program => program.isReady()));
+  }
+  #_pollGraphics(signal, ready) {
+    return new Promise((resolve, reject) => {
+      let timer = null, finished = false;
+      const finish = error => {
+        if (finished) return;
+        finished = true; if (timer !== null) clearTimeout(timer);
+        signal.removeEventListener('abort', abort);
+        if (error) reject(error); else resolve();
+      };
+      const abort = () => finish(signal.reason ?? new Error('Scene preparation was cancelled.'));
+      const poll = () => {
+        if (signal.aborted) { abort(); return; }
+        try { if (ready()) { finish(); return; } } catch (error) { finish(error); return; }
+        timer = setTimeout(poll, 10);
+      };
+      signal.addEventListener('abort', abort, { once: true }); poll();
+    });
+  }
+  async #_waitForGraphicsSubmission(signal) {
+    const gl = this.#renderer.getContext();
+    if (typeof gl.fenceSync !== 'function') return;
+    const fence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+    if (!fence) throw new Error('Scene graphics submission could not be checked.');
+    gl.flush();
+    try {
+      await this.#_pollGraphics(signal, () => {
+        const status = gl.clientWaitSync(fence, 0, 0);
+        if (status === gl.WAIT_FAILED || gl.isContextLost()) throw new Error('Scene graphics submission failed.');
+        return status === gl.ALREADY_SIGNALED || status === gl.CONDITION_SATISFIED;
+      });
+    } finally { gl.deleteSync(fence); }
+  }
+  #_disposeSceneResources(resources) {
+    const geometries = new Set(), materials = new Set();
+    for (const scene of [resources.scene, resources.rtScene]) scene?.traverse(object => {
+      if (object.geometry) geometries.add(object.geometry);
+      for (const material of Array.isArray(object.material) ? object.material : [object.material]) if (material) materials.add(material);
+    });
+    const release = resource => { try { resource?.dispose?.(); } catch { /* Release the rest of the owned bundle. */ } };
+    for (const geometry of geometries) release(geometry);
+    for (const material of materials) release(material);
+    release(resources.scene?.background);
+    release(resources.renderTarget);
+    release(resources.composer);
+    release(resources.fx);
+  }
   setExternalClock(value) {
     if (this.#isDisposed) return;
     if (value !== null && (!value || typeof value !== "object" || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null || Reflect.ownKeys(value).length !== 3 || !["time", "rate", "playing"].every(name => {
@@ -549,6 +940,7 @@ export class MAGEEngine {
     canvas,
     pixelRatio,
     renderBudget,
+    initialScene = 'default',
     log = false,
     autoStart = false,
     withControls: {
@@ -557,6 +949,8 @@ export class MAGEEngine {
     } = {},
     lowQualityMode = false
   } = {}) {
+    if (initialScene !== 'default' && initialScene !== 'empty') throw new TypeError('Unsupported initial scene.');
+    this.#initialScene = initialScene;
     if (log) {
       console.log(`Initializing MAGE Engine v${this.#engineVersion}...`);
       this.log = true;
@@ -598,32 +992,7 @@ export class MAGEEngine {
       pointerDown: 0,
       currPointerDown: 0
     };
-    this.#state = {
-      time_multiplier: 1,
-      mouse: new Vector3(),
-      currMouse: new Vector3(),
-      size: 0,
-      pointerDown: 0,
-      pointerDownMultiplier: 0,
-      currPointerDown: 0,
-      currAudio: 0,
-      currBass: 0,
-      currMid: 0,
-      currTreble: 0,
-      currEnergy: 0,
-      currCentroid: 0,
-      currEnergyTrend: 0.5,
-      audioMappingIntensity: 1,
-      time: 0,
-      volume_multiplier: 0,
-      minimizing_factor: .8,
-      power_factor: 8,
-      base_speed: .2,
-      easing_speed: .6,
-      camTilt: 0,
-      camOrientationMode: 0,
-      camOrientationSpeed: 1
-    };
+    this.#state = createMageState();
     this.#timeIncreasing = true;
     this.#screenShake = this.#_createScreenShake();
     this.#currentPreset = null;
@@ -818,7 +1187,7 @@ export class MAGEEngine {
     this.#clock.reset();
     this.#lastRenderTime = null;
     this.#_render();
-    if (!this.#currentPreset && !this.#visualizer.mesh) this.#_loadDefaultPreset();
+    if (this.#initialScene === 'default' && !this.#currentPreset && !this.#visualizer.mesh) this.#_loadDefaultPreset();
   }
 
   /** Stop the render loop without disposing the reusable scene. */
@@ -1070,6 +1439,7 @@ export class MAGEEngine {
       });
       return;
     }
+    if (this.#preparedScene) this.discardPreparedPreset(this.#preparedScene.token);
     this.#currentPreset = preset;
     this.setAudioResponseMode(preset.audioResponse);
     if (this.#audioResponseMode === "mapped-v1") this.setAudioResponseConfig(preset.audioResponseConfig);
@@ -1116,6 +1486,7 @@ export class MAGEEngine {
     if (this.#renderer) {
       this.#renderer.domElement.remove();
       this.#renderer.dispose();
+      this.#_recordGraphicsEvent('context-disposed');
       this.#renderer = null;
     }
     this.#canvas = newCanvas;
@@ -1455,6 +1826,9 @@ export class MAGEEngine {
   dispose() {
     if (this.#audioAnalysis) this.#_resetAudioAnalysis();
     if (this.#isDisposed) return;
+    if (this.#preparedScene) this.discardPreparedPreset(this.#preparedScene.token);
+    this.#skyboxGeneration++;
+    this.#_pendingSkyboxLoad = null;
     this.#externalAudio = null;
     this.#externalAudioFrames = [];
     this.#externalAudioLastFrame = null;
@@ -1469,31 +1843,19 @@ export class MAGEEngine {
       cancelAnimationFrame(this.#animationFrameId);
       this.#animationFrameId = null;
     }
+    this.#_disposeSceneResources(this.#_sceneResources());
     if (this.#renderer) {
       this.#renderer.dispose();
+      this.#_recordGraphicsEvent('context-disposed');
       this.#renderer.forceContextLoss();
       this.#renderer.context = null;
       this.#renderer.domElement = null;
       this.#renderer = null;
     }
-    if (this.#scene) {
-      this.#scene.traverse(object => {
-        if (object.geometry) object.geometry.dispose();
-        if (object.material) if (Array.isArray(object.material)) object.material.forEach(material => material.dispose());else object.material.dispose();
-      });
-      this.#scene = null;
-    }
-    if (this.#renderTarget) {
-      this.#renderTarget.dispose();
-      this.#renderTarget = null;
-    }
-    if (this.#rtScene) {
-      this.#rtScene.traverse(object => {
-        if (object.geometry) object.geometry.dispose();
-        if (object.material) if (Array.isArray(object.material)) object.material.forEach(material => material.dispose());else object.material.dispose();
-      });
-      this.#rtScene = null;
-    }
+    this.#scene = null;
+    this.#renderTarget = null;
+    this.#rtScene = null;
+    this.#composer = null;
     if (this.#rtCamera) this.#rtCamera = null;
     if (this.#camera) this.#camera = null;
     if (this.#controls) {
@@ -1894,6 +2256,7 @@ export class MAGEEngine {
     } else this.#_syncViewport();
     this.#_syncSobelResolution();
     if (this.#composer) this.#composer.render(this.#scene, this.#camera);else this.#renderer.render(this.#scene, this.#camera);
+    this.#_recordGraphicsEvent('frame');
   }
   #_hideViewportMessage() {
     this.#_ensureViewportToast();
@@ -2058,7 +2421,10 @@ export class MAGEEngine {
         this.fx.toneMapping.method = fx.toneMapping.method;
         if (this.#renderer) this.#renderer.toneMapping = fx.toneMapping.method;
       }
-      if (typeof fx.toneMapping.exposure === "number" && Number.isFinite(fx.toneMapping.exposure) && this.#renderer) this.#renderer.toneMappingExposure = fx.toneMapping.exposure;
+      if (typeof fx.toneMapping.exposure === "number" && Number.isFinite(fx.toneMapping.exposure)) {
+        this.fx.toneMapping.exposure = fx.toneMapping.exposure;
+        if (this.#renderer) this.#renderer.toneMappingExposure = fx.toneMapping.exposure;
+      }
     }
     if (fx.passes && typeof fx.passes === "object") {
       if (typeof fx.passes.rgbShift === "boolean") this.fx.RGBShift.enabled = fx.passes.rgbShift;
@@ -2357,24 +2723,8 @@ export class MAGEEngine {
     this.#viewportToast.el = toast;
   }
   #_disposeForThumbnailCapture() {
-    this.#_pendingSkyboxLoad = null;
     const rendererCanvas = this.#renderer?.domElement || null;
-    try {
-      this.#controls?.dispose?.();
-    } catch {
-      // no-op
-    }
-    try {
-      this.#renderTarget?.dispose?.();
-    } catch {
-      // no-op
-    }
-    try {
-      this.#renderer?.dispose?.();
-      this.#renderer?.forceContextLoss?.();
-    } catch {
-      // no-op
-    }
+    this.dispose();
     if (rendererCanvas?.parentElement) {
       rendererCanvas.parentElement.removeChild(rendererCanvas);
     }
@@ -2393,6 +2743,7 @@ export class MAGEEngine {
     }
     if (this.#isLowQualityMode) rendererOptions.powerPreference = "low-power";
     this.#renderer = new WebGLRenderer(rendererOptions);
+    this.#_recordGraphicsEvent('context-created');
     this.#renderer.debug.onShaderError = () => {
       throw new Error("The scene's GPU program could not be compiled.");
     };
@@ -2441,6 +2792,7 @@ export class MAGEEngine {
 
     // save initial state for reset
     this.#controls.saveState();
+    this.#sceneDefaults = { camera: this.#camera.clone(false), controls: this.#_candidateControls(this.#camera) };
     this.#_ensureViewportToast();
 
     // If a preset with controls was loaded before the scene/controls existed,
@@ -2514,6 +2866,7 @@ export class MAGEEngine {
       return;
     }
     this.#visualizer.skyboxPreset = skyboxId;
+    const generation = ++this.#skyboxGeneration;
     const loader = new CubeTextureLoader();
     this.#_pendingSkyboxLoad = new Promise(resolve => {
       let settled = false;
@@ -2522,10 +2875,11 @@ export class MAGEEngine {
           return;
         }
         settled = true;
-        this.#_pendingSkyboxLoad = null;
+        if (generation === this.#skyboxGeneration) this.#_pendingSkyboxLoad = null;
         resolve(result);
       };
       const texture = loader.load(faceUrls, () => finish(true), undefined, () => finish(false));
+      this.#scene.background?.dispose?.();
       this.#scene.background = texture;
     });
   }

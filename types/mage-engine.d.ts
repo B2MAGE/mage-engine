@@ -275,6 +275,8 @@ export interface MAGEEngineAPI {
   setExternalClock(value: MAGEExternalClock | null): void;
   /** Immutable copy of effective host-owned runtime ceilings. */
   getRenderBudget(): Readonly<MAGERenderBudget>;
+  /** Fixed-size local counters; timestamps use performance.now(). Frames mean submitted draws, not GPU completion. */
+  getGraphicsDiagnostics(): Readonly<MAGEGraphicsDiagnostics>;
   /**
    * Starts the MAGE engine, initiating the rendering loop and enabling audio playback.
    */
@@ -358,6 +360,15 @@ export interface MAGEEngineAPI {
   loadPreset(preset: MAGEPreset): void;
   /** Applies an already compiled artifact. Shader source is retained only as inert metadata; no source fallback occurs. */
   loadCompiledPreset(preset: MAGEPreset, artifact: CompiledShaderArtifact): MAGEPreset;
+  /** Prepare one replacement in the same renderer. Supersedes any older candidate;
+   * cancellation or failure leaves the active scene and playback intent unchanged. */
+  prepareCompiledPreset(preset: MAGEPreset, artifact: CompiledShaderArtifact,
+    options?: { signal?: AbortSignal; timeoutMs?: number; configure?: (fields: MAGEPreparedSceneFields) => void }): Promise<MAGEPreparedScene>;
+  /** Candidate-owned objects for trusted host uniform validation; unavailable after discard/activation. */
+  getPreparedSceneFields(token: MAGEPreparedScene): MAGEPreparedSceneFields;
+  /** Atomically installs the prepared scene, then disposes the previous scene's resources. Does not resume playback. */
+  activatePreparedPreset(token: MAGEPreparedScene, options?: { time?: number }): MAGEPreset;
+  discardPreparedPreset(token: MAGEPreparedScene): void;
   /**
    * Swaps the current rendering canvas with a new HTMLCanvasElement. This allows users to change the output canvas dynamically, which can be useful for 
    * integrating the MAGE engine into different parts of a web application or for implementing features like picture-in-picture or multi-view setups.
@@ -456,6 +467,8 @@ export interface MAGERenderBudget {
 }
 
 export interface MAGEConfig {
+  /** Skip generated default scene/skybox when the host will immediately load compiled data. Defaults to 'default'. */
+  initialScene?: 'default' | 'empty';
   renderBudget?: Partial<MAGERenderBudget>;
   /** The HTML canvas element to render the engine on. */
   canvas: HTMLCanvasElement;
@@ -472,6 +485,43 @@ export interface MAGEConfig {
   };
   /** Whether the engine should start automatically after initialization. */
   autoStart?: boolean;
+}
+
+export interface MAGEGraphicsDiagnostics {
+  contextsCreated: number;
+  contextsDisposed: number;
+  submittedFrames: number;
+  firstContextAt: number | null;
+  lastContextAt: number | null;
+  lastContextDisposedAt: number | null;
+  firstFrameAt: number | null;
+  lastFrameAt: number | null;
+  geometries: number;
+  textures: number;
+  programs: number;
+  peakGeometries: number;
+  peakTextures: number;
+  peakPrograms: number;
+  running: boolean;
+  disposed: boolean;
+  candidatesStarted: number;
+  candidatesPrepared: number;
+  candidatesActivated: number;
+  candidatesDiscarded: number;
+  preparationStartedAt: number | null;
+  programsReadyAt: number | null;
+  candidateFrameAt: number | null;
+  activatedAt: number | null;
+  preparationMode: 'parallel' | 'first-use' | null;
+}
+
+declare const preparedSceneBrand: unique symbol;
+/** Opaque token; only its owning engine can inspect, activate or discard it. */
+export interface MAGEPreparedScene { readonly [preparedSceneBrand]: true; }
+/** Trusted synchronous candidate setup runs before graphics preparation. Camera
+ * and controls are staging snapshots; getEngineFields() supplies session objects after activation. */
+export interface MAGEPreparedSceneFields {
+  scene: unknown; camera: unknown; state: Record<string, unknown>; visualizer: unknown; controls: unknown;
 }
 
 /**

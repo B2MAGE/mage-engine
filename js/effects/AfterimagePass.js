@@ -1,6 +1,7 @@
 // Based on Three.js r183 AfterimagePass (MIT). See dist/licenses/Three-LICENSE.
 // Start targets at 1x1; the bounded composer supplies their actual size.
 import {
+	Color,
 	HalfFloatType,
 	NearestFilter,
 	NoBlending,
@@ -162,6 +163,25 @@ class AfterimagePass extends Pass {
 
 		this._textureComp.setSize( width, height );
 		this._textureOld.setSize( width, height );
+
+	}
+
+	/** Discard an offscreen preparation frame without changing effect settings. */
+	resetHistory( renderer ) {
+
+		const previous = renderer.getRenderTarget();
+		const alpha = renderer.getClearAlpha();
+		const color = renderer.getClearColor( this._resetColor ??= new Color() );
+		try {
+			renderer.setClearColor( 0, 0 );
+			for ( const target of [ this._textureOld, this._textureComp ] ) {
+				renderer.setRenderTarget( target );
+				renderer.clear();
+			}
+		} finally {
+			renderer.setRenderTarget( previous );
+			renderer.setClearColor( color, alpha );
+		}
 
 	}
 
