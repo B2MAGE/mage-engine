@@ -8,6 +8,9 @@ export class AudioAnalysisKernel {
 		this.windowPower = this.window.reduce((sum, value) => sum + value * value, 0);
 		this.real = new Float64Array(this.fftSize);
 		this.imaginary = new Float64Array(this.fftSize);
+		this.spectrumEnabled = false;
+		this.spectrumBounds = null;
+		this.spectrumPowers = null;
 		this.setSensitivity(sensitivity);
 		this.reset();
 	}
@@ -21,6 +24,31 @@ export class AudioAnalysisKernel {
 		}
 		return next;
 	}
+	setSpectrumEnabled(enabled) {
+		const next = enabled === true;
+		if (next === this.spectrumEnabled) return;
+		this.spectrumEnabled = next;
+		this.latestSpectrum = null;
+		this.lastSpectrumTime = -Infinity;
+		if (next && !this.spectrumBounds) {
+			const first = Math.max(1, Math.ceil(40 * this.fftSize / this.sampleRate));
+			const end = Math.min(this.fftSize / 2, Math.floor(8000 * this.fftSize / this.sampleRate) + 1);
+			const count = Math.min(36, Math.max(0, end - first));
+			this.spectrumBounds = [first];
+			for (let index = 1; index <= count; index++) {
+				// Approximately logarithmic, but never invent finer resolution than
+				// the existing FFT: every slice contains at least one distinct bin.
+				const logarithmic = Math.round(first * (end / first) ** (index / count));
+				this.spectrumBounds.push(Math.min(end - (count - index), Math.max(this.spectrumBounds.at(-1) + 1, logarithmic)));
+			}
+			this.spectrumPowers = new Float64Array(count);
+		}
+	}
+	spectrum(now) {
+		const snapshot = this.latestSpectrum;
+		if (!this.spectrumEnabled || !Number.isFinite(now) || !snapshot || Math.abs(now - snapshot.time) > 0.5) return null;
+		return { ...snapshot, values: [...snapshot.values] };
+	}
 	reset() {
 		this.sequence = 0;
 		this.sampleCount = 0;
@@ -31,6 +59,8 @@ export class AudioAnalysisKernel {
 		this.ringPosition = 0;
 		this.ringCount = 0;
 		this.detectors = null;
+		this.latestSpectrum = null;
+		this.lastSpectrumTime = -Infinity;
 	}
 	transform() {
 		const real = this.real, imaginary = this.imaginary, size = this.fftSize;
@@ -62,9 +92,11 @@ export class AudioAnalysisKernel {
 			}
 		}
 	}
-	bandLevels() {
+	bandLevels(time) {
 		const powers = { bass: 0, mid: 0, treble: 0 };
 		if (this.ringCount < this.fftSize) return powers;
+		const collectSpectrum = this.spectrumEnabled && this.spectrumPowers.length > 0 && time - this.lastSpectrumTime >= 0.1 - 1e-9;
+		if (collectSpectrum) this.spectrumPowers.fill(0);
 		for (const ring of this.rings) {
 			for (let index = 0; index < this.fftSize; index++) this.real[index] = ring[(this.ringPosition + index) % this.fftSize] * this.window[index];
 			this.imaginary.fill(0);
@@ -74,11 +106,28 @@ export class AudioAnalysisKernel {
 				const band = hz >= 40 && hz < 180 ? 'bass' : hz >= 180 && hz < 2000 ? 'mid' : hz >= 2000 && hz <= 8000 ? 'treble' : null;
 				if (band) powers[band] += this.real[bin] ** 2 + this.imaginary[bin] ** 2;
 			}
+			if (collectSpectrum) {
+				for (let slice = 0; slice < this.spectrumPowers.length; slice++) {
+					for (let bin = this.spectrumBounds[slice]; bin < this.spectrumBounds[slice + 1]; bin++) {
+						this.spectrumPowers[slice] += this.real[bin] ** 2 + this.imaginary[bin] ** 2;
+					}
+				}
+			}
 		}
 		const scale = 2 / (this.fftSize * this.windowPower * this.rings.length);
 		for (const band of ['bass', 'mid', 'treble']) {
 			const rms = Math.sqrt(powers[band] * scale);
 			powers[band] = rms < 0.0003 ? 0 : Math.min(1, rms);
+		}
+		if (collectSpectrum) {
+			this.lastSpectrumTime = time;
+			this.latestSpectrum = {
+				time, minHz: 40, maxHz: Math.min(8000, this.sampleRate / 2),
+				values: Array.from(this.spectrumPowers, power => {
+					const rms = Math.sqrt(power * scale);
+					return rms < 0.0003 ? 0 : Math.min(1, rms);
+				}),
+			};
 		}
 		return powers;
 	}
@@ -140,7 +189,7 @@ export class AudioAnalysisKernel {
 			this.sampleCount++;
 			if (this.sampleCount === this.hopSize) {
 				const time = startTime + (index + 1) / this.sampleRate;
-				const levels = { ...this.bandLevels(), overall: Math.min(1, Math.sqrt(this.energy / this.valueCount)) };
+				const levels = { ...this.bandLevels(time), overall: Math.min(1, Math.sqrt(this.energy / this.valueCount)) };
 				frames.push({
 					sequence: ++this.sequence,
 					time, levels, hits: this.detectHits(levels, time),
@@ -162,14 +211,22 @@ class MAGEAudioAnalysisProcessor extends AudioWorkletProcessor {
     super();
     this.kernel = new AudioAnalysisKernel(sampleRate, options.processorOptions.sensitivity);
     this.epoch = options.processorOptions.epoch;
+    this.spectrumEpoch = options.processorOptions.spectrumEpoch;
+    this.kernel.setSpectrumEnabled(options.processorOptions.spectrumEnabled);
+    this.lastSpectrumTime = null;
     this.port.onmessage = ({ data }) => {
       if (data?.type === 'reset') {
         this.epoch = data.epoch;
         this.kernel.reset();
         this.kernel.setSensitivity(data.sensitivity);
+        this.lastSpectrumTime = null;
       } else if (data?.type === 'sensitivity') {
         this.epoch = data.epoch;
         this.kernel.setSensitivity(data.value);
+      } else if (data?.type === 'spectrum') {
+        this.spectrumEpoch = data.spectrumEpoch;
+        this.kernel.setSpectrumEnabled(data.enabled);
+        this.lastSpectrumTime = null;
       }
     };
   }
@@ -177,6 +234,13 @@ class MAGEAudioAnalysisProcessor extends AudioWorkletProcessor {
     for (const output of outputs) for (const channel of output) channel.fill(0);
     const frames = this.kernel.process(inputs[0] || [], currentTime);
     if (frames.length) this.port.postMessage({ epoch: this.epoch, frames });
+    if (this.kernel.spectrumEnabled && this.kernel.latestSpectrum?.time !== this.lastSpectrumTime) {
+      const spectrum = this.kernel.spectrum(currentTime + (inputs[0]?.[0]?.length || 0) / sampleRate);
+      if (spectrum && spectrum.time !== this.lastSpectrumTime) {
+        this.lastSpectrumTime = spectrum.time;
+        this.port.postMessage({ epoch: this.epoch, spectrumEpoch: this.spectrumEpoch, spectrum });
+      }
+    }
     return true;
   }
 }
@@ -186,10 +250,22 @@ registerProcessor('mage-audio-analysis-v1', MAGEAudioAnalysisProcessor);
 
 const MAX_QUEUE = 512;
 const MAX_AGE = 1;
+const SPECTRUM_MAX_AGE = 0.5;
 const contextModules = new WeakMap();
 
 function copyFrame(frame) {
 	return { ...frame, levels: { ...frame.levels }, hits: frame.hits.map(hit => ({ ...hit })) };
+}
+
+function copySpectrum(snapshot) {
+	return { time: snapshot.time, minHz: snapshot.minHz, maxHz: snapshot.maxHz, values: [...snapshot.values] };
+}
+
+function validSpectrum(snapshot) {
+	return snapshot && Number.isFinite(snapshot.time) && snapshot.minHz === 40
+		&& Number.isFinite(snapshot.maxHz) && snapshot.maxHz > snapshot.minHz && snapshot.maxHz <= 8000
+		&& Array.isArray(snapshot.values) && snapshot.values.length > 0 && snapshot.values.length <= 36
+		&& snapshot.values.every(value => Number.isFinite(value) && value >= 0 && value <= 1);
 }
 
 function loadModule(context) {
@@ -219,10 +295,28 @@ export class AudioAnalysisSession {
 		this.context = null;
 		this.frames = [];
 		this.latest = null;
+		this.spectrumEnabled = false;
+		this.spectrumEpoch = 0;
+		this.latestSpectrum = null;
 		this.droppedFrames = 0;
 		this.sensitivity = typeof sensitivity === 'number' && Number.isFinite(sensitivity) ? Math.max(0.1, Math.min(4, sensitivity)) : 1;
 	}
 	get status() { return this._status; }
+	setSpectrumEnabled(enabled) {
+		if (this._status === 'disposed') return;
+		const next = enabled === true;
+		if (next === this.spectrumEnabled) return;
+		this.spectrumEnabled = next;
+		this.spectrumEpoch++;
+		this.latestSpectrum = null;
+		this.node?.port.postMessage({ type: 'spectrum', enabled: next, spectrumEpoch: this.spectrumEpoch });
+	}
+	spectrum(now) {
+		const snapshot = this.latestSpectrum;
+		if (!this.spectrumEnabled || this._status !== 'connected' || !Number.isFinite(now)
+			|| !snapshot || Math.abs(now - snapshot.time) > SPECTRUM_MAX_AGE) return null;
+		return copySpectrum(snapshot);
+	}
 	setSensitivity(value) {
 		const next = typeof value === 'number' && Number.isFinite(value) ? Math.max(0.1, Math.min(4, value)) : 1;
 		if (this._status === 'disposed') return this.sensitivity;
@@ -231,6 +325,7 @@ export class AudioAnalysisSession {
 			this.epoch++;
 			this.frames.length = 0;
 			this.latest = null;
+			this.latestSpectrum = null;
 			this.node?.port.postMessage({ type: 'sensitivity', value: next, epoch: this.epoch });
 		}
 		return next;
@@ -255,12 +350,17 @@ export class AudioAnalysisSession {
 			if (generation !== this.generation || this._status === 'disposed') return false;
 			const node = this.nodeFactory(context, 'mage-audio-analysis-v1', {
 				numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
-				processorOptions: { epoch: this.epoch, sensitivity: this.sensitivity },
+				processorOptions: { epoch: this.epoch, sensitivity: this.sensitivity, spectrumEnabled: this.spectrumEnabled, spectrumEpoch: this.spectrumEpoch },
 			});
 			this.node = node;
 			this.output = source.getOutput();
 			node.port.onmessage = ({ data }) => {
-				if (generation !== this.generation || data?.epoch !== this.epoch || !Array.isArray(data.frames)) return;
+				if (generation !== this.generation || data?.epoch !== this.epoch) return;
+				if (this.spectrumEnabled && data.spectrumEpoch === this.spectrumEpoch && validSpectrum(data.spectrum)
+					&& Math.abs(context.currentTime - data.spectrum.time) <= SPECTRUM_MAX_AGE) {
+					this.latestSpectrum = copySpectrum(data.spectrum);
+				}
+				if (!Array.isArray(data.frames)) return;
 				for (const frame of data.frames) {
 					if (!Number.isFinite(frame?.time) || !frame.levels || !Array.isArray(frame.hits)) continue;
 					if (context.currentTime - frame.time > MAX_AGE) { this.droppedFrames++; continue; }
@@ -297,6 +397,7 @@ export class AudioAnalysisSession {
 		this.epoch++;
 		this.frames.length = 0;
 		this.latest = null;
+		this.latestSpectrum = null;
 		this.droppedFrames = 0;
 		this.node?.port.postMessage({ type: 'reset', epoch: this.epoch, sensitivity: this.sensitivity });
 	}
@@ -316,6 +417,7 @@ export class AudioAnalysisSession {
 		this.context = null;
 		this.frames.length = 0;
 		this.latest = null;
+		this.latestSpectrum = null;
 		this.droppedFrames = 0;
 		this.error = null;
 		if (this._status !== 'disposed') this._status = 'idle';
@@ -342,6 +444,7 @@ export class AudioAnalysisSession {
 	}
 	dispose() {
 		this.disconnect();
+		this.spectrumEnabled = false;
 		this._status = 'disposed';
 	}
 }

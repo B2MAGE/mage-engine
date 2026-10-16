@@ -22,6 +22,10 @@ The behavior baseline is the frontend's patched `@notrac/mage@1.0.3` at frontend
 
 The supported creative audio modes are Original (`legacy`) and Selective (`mapped-v1`). Version `1.0.4-mage.3` removes the retired `transient-v1` detector, analyser and external-envelope paths. Unsupported mode values throw instead of silently selecting Original; an omitted mode still selects Original. The existing Original amplitude/timing formula and Selective shared analysis/mappings are unchanged. The `legacy` identifier names the supported Original response, not obsolete behavior to remove. Upstream preview audio fields retain their initial defaults, and the fork's public `stop()` lifecycle method remains available.
 
+Version `1.0.4-mage.4` adds an optional audio inspector spectrum using `AudioAnalysisSession.setSpectrumEnabled(true)` and `spectrum(audioContext.currentTime)` from the `audio-analysis` export. It is off by default. While enabled, the existing 2048-point FFT also supplies up to 36 low-to-high, approximately logarithmic RMS slices covering 40–8000 Hz (or Nyquist for lower sample rates). Each slice includes at least one distinct FFT bin; it does not claim resolution below the existing FFT. Aggregation and worklet transmission run at most 10 times per second, with no additional analyser or FFT and no changes to Original/Selective levels, hits or mapping timing. Values are linear RMS in `[0, 1]`, not decibels or an independently normalized loudness scale.
+
+`spectrum(now)` returns `{ time, minHz, maxHz, values }` independently of `drain()`, or `null` while disabled, disconnected, warming up, or more than 0.5 seconds from the supplied audio clock. Reset and reconnect clear the cache while preserving the opt-in preference; disabling and disposal clear it immediately. Consumers should disable it when the inspector closes or playback stops. Simulated beats have no recorded waveform spectrum; consumers must show that state honestly rather than fabricate frequency bars.
+
 ## Build and verification
 
 Use Node 22.13 or newer compatible with Vite 8. From a fresh checkout:
@@ -33,7 +37,7 @@ node scripts/test_generated_shader_parse.cjs
 npm pack
 ```
 
-`npm test` rebuilds first. `npm pack` also rebuilds and emits `b2mage-mage-engine-1.0.4-mage.3.tgz`. No install/prepare hook runs in the consuming frontend, and the tarball requires no runtime npm dependencies.
+`npm test` rebuilds first. `npm pack` also rebuilds and emits `b2mage-mage-engine-1.0.4-mage.4.tgz`. No install/prepare hook runs in the consuming frontend, and the tarball requires no runtime npm dependencies.
 
 `scripts/build-package.mjs` is the package build entrypoint. It builds the engine and a separate compiler entry, copies source-owned shared modules and declarations, and includes dependency licenses. It reads six static GLSL scaffold strings from the pinned ShaderPark dependency because that dependency does not export them; extraction accepts literal strings only and fails if the dependency shape changes. It never rewrites `node_modules` or extracts JavaScript functions from a compiled engine bundle.
 
@@ -48,6 +52,7 @@ The regression suite checks:
 - Live settings validate the entire update before state changes.
 - Audio analysis is independent of block size, mappings are independent of render frequency, and disposed async audio sessions cannot reconnect.
 - Render budgets and Original/Selective audio modes survive the packaged entrypoint. Invalid and retired modes are rejected before changing the active response, settings, mappings or queued audio frames.
+- Optional spectrum slices identify bass, mid and treble tones at 44.1/48 kHz and preserve stereo power. Enabling inspection changes neither response frames nor FFT counts; worklet messages are bounded to 10 Hz and stale data cannot survive a toggle, reset or reconnect.
 
 The original `scripts/test_audio_analysis.cjs` currently fails three expectations against unchanged upstream source: its 64-bin bass fixture misses the defined bass band, and it expects an `audioState` argument to alter a generator that does not read that argument. `npm run test:upstream` retains this diagnostic. These failures also occur on the merged upstream baseline; this release does not change those audio/generation algorithms to satisfy stale expectations. The active sample-driven audio path has separate passing behavior tests above.
 
@@ -60,7 +65,7 @@ The renderer receives validated data and calls `loadCompiledPreset`; source text
 ## Release procedure
 
 1. Commit and review the source plus lockfile, run the checks above, and complete frontend production/runtime verification with the local tarball.
-2. Merge into this fork, tag the reviewed commit using the package version (currently `v1.0.4-mage.3`), then rebuild and pack that exact commit with `npm ci`.
+2. Merge into this fork, tag the reviewed commit using the package version (currently `v1.0.4-mage.4`), then rebuild and pack that exact commit with `npm ci`.
 3. Attach the tarball to the fork's GitHub Release. Never replace an already consumed asset; use a new version for any changed bytes.
 4. Pin the frontend dependency to the complete release asset URL and commit the resulting lockfile integrity. Remove the old engine patch only after consumer tests pass.
 
