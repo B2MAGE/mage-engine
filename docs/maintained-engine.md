@@ -37,7 +37,7 @@ node scripts/test_generated_shader_parse.cjs
 npm pack
 ```
 
-`npm test` rebuilds first. `npm pack` also rebuilds and emits `b2mage-mage-engine-1.0.4-mage.5.tgz`. No install/prepare hook runs in the consuming frontend, and the tarball requires no runtime npm dependencies.
+`npm test` rebuilds first. `npm pack` also rebuilds and emits `b2mage-mage-engine-1.0.4-mage.6.tgz`. No install/prepare hook runs in the consuming frontend, and the tarball requires no runtime npm dependencies.
 
 `scripts/build-package.mjs` is the package build entrypoint. It builds the engine and a separate compiler entry, copies source-owned shared modules and declarations, and includes dependency licenses. It reads six static GLSL scaffold strings from the pinned ShaderPark dependency because that dependency does not export them; extraction accepts literal strings only and fails if the dependency shape changes. It never rewrites `node_modules` or extracts JavaScript functions from a compiled engine bundle.
 
@@ -59,6 +59,10 @@ The original `scripts/test_audio_analysis.cjs` currently fails three expectation
 ## Compilation and runtime boundary
 
 ### Explicit compiled-scene startup and local graphics measurements (PL-08)
+
+Version `1.0.4-mage.6` adds the owned scene replacement lifecycle below and the
+PL-03 expanded shader workload bounds. Original and Selective behavior and the
+existing rendering budgets remain unchanged.
 
 Hosts that immediately load an independently validated compiled scene can pass
 `initialScene: 'empty'` to `initMAGE`. `start()` then initializes the renderer,
@@ -162,7 +166,7 @@ These are conservative weighted units, not GPU instruction counts or elapsed-tim
 ## Release procedure
 
 1. Commit and review the source plus lockfile, run the checks above, and complete frontend production/runtime verification with the local tarball.
-2. Merge into this fork, tag the reviewed commit using the package version (currently `v1.0.4-mage.5`), then rebuild and pack that exact commit with `npm ci`.
+2. Merge into this fork, tag the reviewed commit using the package version (currently `v1.0.4-mage.6`), then rebuild and pack that exact commit with `npm ci`.
 3. Attach the tarball to the fork's GitHub Release. Never replace an already consumed asset; use a new version for any changed bytes.
 4. Pin the frontend dependency to the complete release asset URL and commit the resulting lockfile integrity. Remove the old engine patch only after consumer tests pass.
 
