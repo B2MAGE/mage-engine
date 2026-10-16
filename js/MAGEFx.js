@@ -482,6 +482,13 @@ export class MAGEEffects {
     });
     return newComposer;
   }
+  dispose() {
+    const passes = new Set();
+    for (const value of Object.values(this)) if (value?.shader?.dispose) passes.add(value.shader);
+    for (const pass of passes) {
+      try { pass.dispose(); } catch { /* Other passes still own resources to release. */ }
+    }
+  }
   randomizeSettings() {
     const engine = this.engine;
     const {

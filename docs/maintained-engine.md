@@ -82,6 +82,56 @@ not verify first-use shader linkage. Staged preparation must therefore own its
 resources through cancellation and verify a candidate draw before activation;
 the startup optimization does not weaken those requirements.
 
+`prepareCompiledPreset(preset, artifact, { signal, timeoutMs, configure })` independently
+normalizes the artifact, then builds one candidate scene in the current renderer.
+The candidate owns its mesh/material, picking target, background texture,
+settings snapshot, effects and composer targets. Omitted authored settings start
+from the same defaults as a fresh engine, rather than inheriting the previous
+scene's effects, intent or camera. A newer preparation discards
+the prior candidate. Its callbacks and bounded polls cannot mutate an active
+scene or a later candidate. The default preparation deadline is 10 seconds,
+clamped to at most 15 seconds; hosts retain their own execution deadlines.
+
+The candidate's main program uses Three's `compile()` and a cancellable
+readiness poll over the pinned r183 material program handles when the parallel
+compilation extension is available. Otherwise first-use preparation can still
+block on the graphics driver. Once its background is ready, the full candidate
+pipeline draws offscreen at the existing bounded dimensions. A WebGL2 fence is
+polled without blocking before readiness is reported; no `finish()` or
+synchronous pixel read is introduced. First-use linkage/draw failure rejects
+the candidate. Enabled afterimage history is cleared after the probe so that
+preparation cannot leave a visible trail. This cannot guarantee that every
+future frame or GPU-driver operation will succeed; context-loss detection and
+the application's containment deadlines remain necessary.
+
+The optional synchronous `configure(fields)` hook lets the trusted host validate
+Builder uniform slots and install its fixed pointer material behavior before
+the final program is compiled and probed. It must not run asynchronous work or
+untrusted source. The opaque token returned on readiness can be inspected with
+`getPreparedSceneFields(token)`; its program must not be changed after preparation.
+`activatePreparedPreset(token)` presents one frame even while paused, synchronously
+switches to that candidate and releases the prior scene's owned resources. If
+presentation or camera commit fails, the previous scene is restored and repainted;
+failure to repaint is reported as a session render error. Activation does not
+restart the renderer or resume a paused engine. The session camera/control
+objects, external clock and external audio transport remain in place. Clock
+behavior is preserved by default; a host resetting a replacement to its
+authored starting time can pass `activatePreparedPreset(token, { time })` (0 to
+604800 seconds) so the first visible frame uses that time, then set its external
+clock as usual. Identical
+Original/Selective mode and mapping settings retain their current audio state;
+changed mode/settings apply at activation. `discardPreparedPreset(token)` is
+idempotent, and foreign/stale tokens cannot dispose the active scene.
+
+Candidate creation, readiness, activation and discard counters/timestamps extend
+the same fixed diagnostics snapshot. Current and peak resource counts include
+the short overlap of one active and one candidate scene. Normal replacements
+dispose geometry/materials once despite the picking clone, release background
+textures, composers and every owned effect pass, and keep the WebGL context.
+Full engine disposal additionally cancels preparation and retains
+`forceContextLoss()`. No raw source executes in this path and accepted shader
+output, image dimensions, effect count and raymarch budgets remain unchanged.
+
 `compileShader` evaluates ShaderPark source as JavaScript. It is **not a sandbox**. Untrusted source must run in the application's disposable compiler worker, with the application's timeouts and termination policy. Keep compiler bundling tree shaking disabled: helper functions are referenced through dynamic evaluation. Production rebundling is tested, but a consumer that removes the lexical helper environment can still break compilation.
 
 The renderer receives validated data and calls `loadCompiledPreset`; source text there is inert metadata. `loadPreset` with raw source remains an API for trusted local content. Do not route user source through that API. Browser isolation, origin/CSP restrictions, worker termination and cross-window protocol validation remain the consuming application's responsibilities. Engine render budgets bound workload; they cannot guarantee that a GPU driver will never stall.
