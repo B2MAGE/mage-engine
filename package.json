@@ -1,6 +1,6 @@
 {
   "name": "@b2mage/mage-engine",
-  "version": "1.0.4-mage.3",
+  "version": "1.0.4-mage.4",
   "description": "Maintained MAGE portfolio engine: bounded rendering, worker compilation, live scene settings and audio response.",
   "main": "dist/mage-engine.js",
   "module": "dist/mage-engine.js",

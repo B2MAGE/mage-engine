@@ -18,6 +18,17 @@ export interface AudioAnalysisSnapshot {
   queuedFrames: number;
   droppedFrames: number;
 }
+/** Optional spectrum from the existing FFT; independent of audio response frames. */
+export interface AudioSpectrumSnapshot {
+  /** AudioContext time, in seconds. */
+  time: number;
+  minHz: number;
+  maxHz: number;
+  /** Up to 36 low-to-high RMS slices in [0, 1], approximately logarithmic.
+   * Each slice includes at least one distinct FFT bin; low slices therefore
+   * reflect the existing FFT resolution rather than synthetic interpolation. */
+  values: number[];
+}
 export interface AudioAnalysisSource {
   context: AudioContext;
   getOutput(): AudioNode;
@@ -28,6 +39,9 @@ export declare class AudioAnalysisKernel {
   readonly hopSize: number;
   readonly sensitivity: number;
   setSensitivity(value: unknown): number;
+  setSpectrumEnabled(enabled: boolean): void;
+  /** Null when disabled, warming up, or more than 0.5 seconds from now. */
+  spectrum(now: number): AudioSpectrumSnapshot | null;
   reset(): void;
   process(channels: Float32Array[], startTime: number): AudioAnalysisFrame[];
 }
@@ -38,6 +52,10 @@ export declare class AudioAnalysisSession {
   readonly error: string | null;
   readonly sensitivity: number;
   setSensitivity(value: unknown): number;
+  /** Off by default. Reset/reconnect preserve the preference, but clear its cache. */
+  setSpectrumEnabled(enabled: boolean): void;
+  /** Returns a copy at most 0.5 seconds old. Does not consume queued response frames. */
+  spectrum(now: number): AudioSpectrumSnapshot | null;
   connect(source: AudioAnalysisSource): Promise<boolean>;
   reset(): void;
   disconnect(): void;
