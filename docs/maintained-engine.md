@@ -58,6 +58,30 @@ The original `scripts/test_audio_analysis.cjs` currently fails three expectation
 
 ## Compilation and runtime boundary
 
+### Explicit compiled-scene startup and local graphics measurements (PL-08)
+
+Hosts that immediately load an independently validated compiled scene can pass
+`initialScene: 'empty'` to `initMAGE`. `start()` then initializes the renderer,
+camera and controls without generating a temporary default shader or loading its
+skybox. The default remains `initialScene: 'default'` for existing integrations.
+This option changes neither render budgets nor the requested scene's output.
+
+`getGraphicsDiagnostics()` returns a frozen, fixed-size local snapshot: context
+creation/disposal counts, successful scene-frame submission count, first/last
+timestamps from `performance.now()`, current geometry/texture/program counts,
+and observed resource peaks. Empty startup draws do not count as a scene's first
+frame. Counters saturate at the largest safe integer; no scene source, media,
+account data, samples or unbounded event history are retained. Disposal records
+the engine's release of its renderer; driver resource reclamation is managed by
+the browser. Render timestamps measure CPU submission, not GPU completion or
+guaranteed presentation. The snapshot remains available after disposal.
+
+The pinned Three.js `compileAsync()` uses `KHR_parallel_shader_compile` when
+available, but its polling cannot be cancelled and successful completion does
+not verify first-use shader linkage. Staged preparation must therefore own its
+resources through cancellation and verify a candidate draw before activation;
+the startup optimization does not weaken those requirements.
+
 `compileShader` evaluates ShaderPark source as JavaScript. It is **not a sandbox**. Untrusted source must run in the application's disposable compiler worker, with the application's timeouts and termination policy. Keep compiler bundling tree shaking disabled: helper functions are referenced through dynamic evaluation. Production rebundling is tested, but a consumer that removes the lexical helper environment can still break compilation.
 
 The renderer receives validated data and calls `loadCompiledPreset`; source text there is inert metadata. `loadPreset` with raw source remains an API for trusted local content. Do not route user source through that API. Browser isolation, origin/CSP restrictions, worker termination and cross-window protocol validation remain the consuming application's responsibilities. Engine render budgets bound workload; they cannot guarantee that a GPU driver will never stall.

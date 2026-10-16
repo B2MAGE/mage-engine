@@ -71,7 +71,17 @@ function mageCaptureDimensions(width, height) {
 function mageCaptureSettleFrames(value) {
   return Number.isFinite(value) && value > 0 ? Math.min(4, Math.max(1, Math.floor(value))) : 2;
 }
+function graphicsCount(value) {
+  return Number.isFinite(value) && value > 0 ? Math.min(Number.MAX_SAFE_INTEGER, Math.floor(value)) : 0;
+}
 export class MAGEEngine {
+  #initialScene = 'default';
+  #graphicsDiagnostics = {
+    contextsCreated: 0, contextsDisposed: 0, submittedFrames: 0,
+    firstContextAt: null, lastContextAt: null, lastContextDisposedAt: null,
+    firstFrameAt: null, lastFrameAt: null,
+    peakGeometries: 0, peakTextures: 0, peakPrograms: 0
+  };
   #pixelRatio = null;
   #renderBudget = MAGE_RENDER_BUDGET;
   #viewportPixelRatio = 0;
@@ -104,12 +114,44 @@ export class MAGEEngine {
       ...this.#renderBudget
     });
   }
+  /** Fixed-size, local snapshot. Counts render submissions, not GPU completion. */
+  getGraphicsDiagnostics() {
+    const geometries = graphicsCount(this.#renderer?.info?.memory?.geometries);
+    const textures = graphicsCount(this.#renderer?.info?.memory?.textures);
+    const programs = graphicsCount(this.#renderer?.info?.programs?.length);
+    const diagnostics = this.#graphicsDiagnostics;
+    diagnostics.peakGeometries = Math.max(diagnostics.peakGeometries, geometries);
+    diagnostics.peakTextures = Math.max(diagnostics.peakTextures, textures);
+    diagnostics.peakPrograms = Math.max(diagnostics.peakPrograms, programs);
+    return Object.freeze({ ...diagnostics, geometries, textures, programs,
+      running: this.#isRunning, disposed: this.#isDisposed });
+  }
+  #_recordGraphicsEvent(type) {
+    const diagnostics = this.#graphicsDiagnostics;
+    diagnostics.peakGeometries = Math.max(diagnostics.peakGeometries, graphicsCount(this.#renderer?.info?.memory?.geometries));
+    diagnostics.peakTextures = Math.max(diagnostics.peakTextures, graphicsCount(this.#renderer?.info?.memory?.textures));
+    diagnostics.peakPrograms = Math.max(diagnostics.peakPrograms, graphicsCount(this.#renderer?.info?.programs?.length));
+    const now = performance.now();
+    if (type === 'context-created') {
+      diagnostics.contextsCreated = Math.min(Number.MAX_SAFE_INTEGER, diagnostics.contextsCreated + 1);
+      diagnostics.firstContextAt ??= now;
+      diagnostics.lastContextAt = now;
+    } else if (type === 'context-disposed') {
+      diagnostics.contextsDisposed = Math.min(Number.MAX_SAFE_INTEGER, diagnostics.contextsDisposed + 1);
+      diagnostics.lastContextDisposedAt = now;
+    } else if (type === 'frame' && this.#visualizer?.mesh) {
+      diagnostics.submittedFrames = Math.min(Number.MAX_SAFE_INTEGER, diagnostics.submittedFrames + 1);
+      diagnostics.firstFrameAt ??= now;
+      diagnostics.lastFrameAt = now;
+    }
+  }
   subscribeRenderLifecycle(listener) {
     if (typeof listener !== "function" || this.#isDisposed) return () => {};
     this.#renderLifecycleListeners.add(listener);
     return () => this.#renderLifecycleListeners.delete(listener);
   }
   #_notifyRenderLifecycle(type) {
+    this.#_recordGraphicsEvent(type);
     for (const listener of this.#renderLifecycleListeners) {
       try {
         listener({
@@ -549,6 +591,7 @@ export class MAGEEngine {
     canvas,
     pixelRatio,
     renderBudget,
+    initialScene = 'default',
     log = false,
     autoStart = false,
     withControls: {
@@ -557,6 +600,8 @@ export class MAGEEngine {
     } = {},
     lowQualityMode = false
   } = {}) {
+    if (initialScene !== 'default' && initialScene !== 'empty') throw new TypeError('Unsupported initial scene.');
+    this.#initialScene = initialScene;
     if (log) {
       console.log(`Initializing MAGE Engine v${this.#engineVersion}...`);
       this.log = true;
@@ -818,7 +863,7 @@ export class MAGEEngine {
     this.#clock.reset();
     this.#lastRenderTime = null;
     this.#_render();
-    if (!this.#currentPreset && !this.#visualizer.mesh) this.#_loadDefaultPreset();
+    if (this.#initialScene === 'default' && !this.#currentPreset && !this.#visualizer.mesh) this.#_loadDefaultPreset();
   }
 
   /** Stop the render loop without disposing the reusable scene. */
@@ -1116,6 +1161,7 @@ export class MAGEEngine {
     if (this.#renderer) {
       this.#renderer.domElement.remove();
       this.#renderer.dispose();
+      this.#_recordGraphicsEvent('context-disposed');
       this.#renderer = null;
     }
     this.#canvas = newCanvas;
@@ -1471,6 +1517,7 @@ export class MAGEEngine {
     }
     if (this.#renderer) {
       this.#renderer.dispose();
+      this.#_recordGraphicsEvent('context-disposed');
       this.#renderer.forceContextLoss();
       this.#renderer.context = null;
       this.#renderer.domElement = null;
@@ -1894,6 +1941,7 @@ export class MAGEEngine {
     } else this.#_syncViewport();
     this.#_syncSobelResolution();
     if (this.#composer) this.#composer.render(this.#scene, this.#camera);else this.#renderer.render(this.#scene, this.#camera);
+    this.#_recordGraphicsEvent('frame');
   }
   #_hideViewportMessage() {
     this.#_ensureViewportToast();
@@ -2371,6 +2419,7 @@ export class MAGEEngine {
     }
     try {
       this.#renderer?.dispose?.();
+      if (this.#renderer) this.#_recordGraphicsEvent('context-disposed');
       this.#renderer?.forceContextLoss?.();
     } catch {
       // no-op
@@ -2393,6 +2442,7 @@ export class MAGEEngine {
     }
     if (this.#isLowQualityMode) rendererOptions.powerPreference = "low-power";
     this.#renderer = new WebGLRenderer(rendererOptions);
+    this.#_recordGraphicsEvent('context-created');
     this.#renderer.debug.onShaderError = () => {
       throw new Error("The scene's GPU program could not be compiled.");
     };

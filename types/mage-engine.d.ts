@@ -275,6 +275,8 @@ export interface MAGEEngineAPI {
   setExternalClock(value: MAGEExternalClock | null): void;
   /** Immutable copy of effective host-owned runtime ceilings. */
   getRenderBudget(): Readonly<MAGERenderBudget>;
+  /** Fixed-size local counters; timestamps use performance.now(). Frames mean submitted draws, not GPU completion. */
+  getGraphicsDiagnostics(): Readonly<MAGEGraphicsDiagnostics>;
   /**
    * Starts the MAGE engine, initiating the rendering loop and enabling audio playback.
    */
@@ -456,6 +458,8 @@ export interface MAGERenderBudget {
 }
 
 export interface MAGEConfig {
+  /** Skip generated default scene/skybox when the host will immediately load compiled data. Defaults to 'default'. */
+  initialScene?: 'default' | 'empty';
   renderBudget?: Partial<MAGERenderBudget>;
   /** The HTML canvas element to render the engine on. */
   canvas: HTMLCanvasElement;
@@ -472,6 +476,25 @@ export interface MAGEConfig {
   };
   /** Whether the engine should start automatically after initialization. */
   autoStart?: boolean;
+}
+
+export interface MAGEGraphicsDiagnostics {
+  contextsCreated: number;
+  contextsDisposed: number;
+  submittedFrames: number;
+  firstContextAt: number | null;
+  lastContextAt: number | null;
+  lastContextDisposedAt: number | null;
+  firstFrameAt: number | null;
+  lastFrameAt: number | null;
+  geometries: number;
+  textures: number;
+  programs: number;
+  peakGeometries: number;
+  peakTextures: number;
+  peakPrograms: number;
+  running: boolean;
+  disposed: boolean;
 }
 
 /**

@@ -32,12 +32,13 @@ export function initMAGE({
   canvas,
   pixelRatio,
   renderBudget,
+  initialScene = 'default',
   log = false, 
   withControls: { active = false, integrated = false } = {}, 
   autoStart = false, 
 } = {}) {
   // Initialize the MAGE Engine with the provided canvas and configuration options.
-  const engine = new MAGEEngine({ canvas, pixelRatio, renderBudget, log, withControls:{ active, integrated }, autoStart });
+  const engine = new MAGEEngine({ canvas, pixelRatio, renderBudget, initialScene, log, withControls:{ active, integrated }, autoStart });
 
   // Return the initialized engine and controls (if created) for external use.
   return engine;
